@@ -1,0 +1,10 @@
+{
+  "name": "@matthewp/zebra",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/view.ts",
+    "./list": "./src/list.ts",
+    "./server": "./src/server.ts"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "zebra",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "playground"
+  ]
+}
