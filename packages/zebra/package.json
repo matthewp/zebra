@@ -1,10 +1,30 @@
 {
   "name": "@matthewp/zebra",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "type": "module",
   "exports": {
-    ".": "./src/view.ts",
-    "./list": "./src/list.ts",
-    "./server": "./src/server.ts"
+    ".": {
+      "types": "./dist/view.d.ts",
+      "default": "./dist/view.js"
+    },
+    "./html": {
+      "types": "./dist/html.d.ts",
+      "default": "./dist/html.js"
+    },
+    "./list": {
+      "types": "./dist/list.d.ts",
+      "default": "./dist/list.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
   }
 }

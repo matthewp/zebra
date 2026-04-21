@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Zebra perf probe</title></head>
+<body>
+<pre id="out"></pre>
+<script>
+const log = s => { document.getElementById('out').textContent += s + '\n'; console.log(s); };
+
+// Zebra's template has whitespace text nodes; Solid's does not
+const ROW_HTML_WHITESPACE = `<tr>
+  <td class="col-md-1"></td>
+  <td class="col-md-4"><a class="lbl"></a></td>
+  <td class="col-md-1"><a class="remove"><span class="remove glyphicon glyphicon-remove" aria-hidden="true"></span></a></td>
+  <td class="col-md-6"></td>
+</tr>`;
+// Solid-style: no whitespace
+const ROW_HTML = `<tr><td class="col-md-1"></td><td class="col-md-4"><a class="lbl"></a></td><td class="col-md-1"><a class="remove"><span class="remove glyphicon glyphicon-remove" aria-hidden="true"></span></a></td><td class="col-md-6"></td></tr>`;
+
+const N = 10000;
+const RUNS = 5;
+
+function median(arr) {
+  const s = arr.slice().sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+function bench(name, fn, n = N, runs = RUNS) {
+  // warmup
+  for (let i = 0; i < 3; i++) fn(100);
+  const times = [];
+  for (let r = 0; r < runs; r++) {
+    const t0 = performance.now();
+    fn(n);
+    times.push(performance.now() - t0);
+  }
+  const med = median(times);
+  log(`${name.padEnd(50)} median=${med.toFixed(2)}ms  (${times.map(t=>t.toFixed(1)).join(', ')})`);
+  return med;
+}
+
+// ─── 1. Cloning strategy ───────────────────────────────────────────────────
+
+const tpl = document.createElement('template');
+tpl.innerHTML = ROW_HTML;
+const cachedEl = tpl.content.firstChild;
+
+const importNodeTime = bench('importNode(tpl.content, true)', n => {
+  for (let i = 0; i < n; i++) document.importNode(tpl.content, true).firstElementChild;
+});
+
+const cloneContentTime = bench('tpl.content.cloneNode(true).firstChild', n => {
+  for (let i = 0; i < n; i++) tpl.content.cloneNode(true).firstChild;
+});
+
+const cloneElTime = bench('cachedEl.cloneNode(true)  [Solid strategy]', n => {
+  for (let i = 0; i < n; i++) cachedEl.cloneNode(true);
+});
+
+log('');
+log(`importNode vs cloneNode(el): ${(importNodeTime / cloneElTime).toFixed(2)}x slower`);
+log('');
+
+// ─── 2. Node lookup strategy ───────────────────────────────────────────────
+
+// Create 1000 real <tr> elements to query
+const rows = [];
+for (let i = 0; i < 1000; i++) rows.push(cachedEl.cloneNode(true));
+
+const qsTime = bench('querySelector(".lbl") x1000', n => {
+  for (let i = 0; i < n; i++) rows[i % 1000].querySelector('.lbl');
+}, 1000);
+
+const traverseTime = bench('firstChild.nextSibling.firstChild x1000', n => {
+  for (let i = 0; i < n; i++) rows[i % 1000].firstChild.nextSibling.firstChild;
+}, 1000);
+
+log('');
+log(`querySelector vs direct traversal: ${(qsTime / traverseTime).toFixed(2)}x slower`);
+log('');
+
+// ─── 3. Full row create+mount+update cycle ────────────────────────────────
+
+const tplWhitespace = document.createElement('template');
+tplWhitespace.innerHTML = ROW_HTML_WHITESPACE;
+const cachedElWhitespace = tplWhitespace.content.firstElementChild;
+
+// Zebra current: cached template (no-whitespace) + importNode + querySelector
+function zebraCreateRow() {
+  const el = document.importNode(tpl.content, true).firstElementChild;
+  const lblNode = el.querySelector('.lbl');
+  const idNode = el.querySelector('td');
+  idNode.textContent = 1;
+  el.setAttribute('data-id', 1);
+  lblNode.textContent = 'pretty red table';
+  return el;
+}
+
+// Zebra with whitespace template (as currently written in row.js)
+function zebraWhitespaceCreateRow() {
+  const el = document.importNode(tplWhitespace.content, true).firstElementChild;
+  const lblNode = el.querySelector('.lbl');
+  const idNode = el.querySelector('td');
+  idNode.textContent = 1;
+  el.setAttribute('data-id', 1);
+  lblNode.textContent = 'pretty red table';
+  return el;
+}
+
+// Solid: cloneNode(cachedEl) + firstChild/nextSibling traversal + textContent on td + .data on text node
+function solidCreateRow() {
+  const el = cachedEl.cloneNode(true);
+  const idTd = el.firstChild;
+  const lblA = idTd.nextSibling.firstChild;
+  idTd.textContent = 1;
+  if (lblA.firstChild) lblA.firstChild.data = 'pretty red table';
+  else lblA.textContent = 'pretty red table';
+  return el;
+}
+
+// Zebra optimized: cloneNode(cachedEl, no-whitespace) + firstChild traversal
+function zebraOptimizedCreateRow() {
+  const el = cachedEl.cloneNode(true);
+  const idTd = el.firstChild;
+  const lblA = idTd.nextSibling.firstChild;
+  idTd.textContent = 1;
+  el.setAttribute('data-id', 1);
+  lblA.textContent = 'pretty red table';
+  return el;
+}
+
+log('--- Full row create+mount+update (N=1000 rows) ---');
+const zebraWsTime = bench('Zebra whitespace tpl + importNode + querySelector', n => {
+  for (let i = 0; i < n; i++) zebraWhitespaceCreateRow();
+}, 1000);
+
+const zebraTime = bench('Zebra no-whitespace tpl + importNode + querySelector', n => {
+  for (let i = 0; i < n; i++) zebraCreateRow();
+}, 1000);
+
+const zebraOptTime = bench('Zebra optimized: cloneNode(el) + traversal', n => {
+  for (let i = 0; i < n; i++) zebraOptimizedCreateRow();
+}, 1000);
+
+const solidTime = bench('Solid: cloneNode(el) + traversal + .data on text node', n => {
+  for (let i = 0; i < n; i++) solidCreateRow();
+}, 1000);
+
+log('');
+log(`Zebra whitespace vs no-whitespace: ${(zebraWsTime/zebraTime).toFixed(2)}x`);
+log(`Zebra importNode+qs vs cloneNode+traversal: ${(zebraTime/zebraOptTime).toFixed(2)}x`);
+log(`Zebra optimized vs Solid: ${(zebraOptTime/solidTime).toFixed(2)}x`);
+log('');
+
+// ─── 4. setAttribute vs not ───────────────────────────────────────────────
+
+log('--- setAttribute(data-id) cost ---');
+bench('cloneNode + traversal WITHOUT setAttribute', n => {
+  for (let i = 0; i < n; i++) {
+    const el = cachedEl.cloneNode(true);
+    el.firstChild.textContent = i;
+    el.firstChild.nextSibling.firstChild.textContent = 'label';
+  }
+}, 1000);
+
+bench('cloneNode + traversal WITH setAttribute', n => {
+  for (let i = 0; i < n; i++) {
+    const el = cachedEl.cloneNode(true);
+    el.setAttribute('data-id', i);
+    el.firstChild.textContent = i;
+    el.firstChild.nextSibling.firstChild.textContent = 'label';
+  }
+}, 1000);
+
+log('');
+log('Done.');
+</script>
+</body>
+</html>

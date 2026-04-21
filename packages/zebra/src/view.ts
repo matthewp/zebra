@@ -1,15 +1,22 @@
-export class View {
+export { SafeHTML, html, unsafeHTML } from './html.ts';
+import { SafeHTML, html } from './html.ts';
+
+export class View<T = Record<string, unknown>> {
   el!: HTMLElement;
 
   createElement(): HTMLElement {
-    let tpl = document.createElement('template');
-    tpl.innerHTML = this.template();
-    this.el = document.importNode(tpl.content, true).firstElementChild as HTMLElement;
+    let ctor = this.constructor as any;
+    if (!ctor._tpl) {
+      let tpl = document.createElement('template');
+      tpl.innerHTML = this.template().toString();
+      ctor._tpl = tpl.content.firstElementChild;
+    }
+    this.el = (ctor._tpl as HTMLElement).cloneNode(true) as HTMLElement;
     return this.el;
   }
 
-  template(_props?: any): string {
-    return '';
+  template(_props?: T): SafeHTML {
+    return html``;
   }
 
   createAndMount(): void {
@@ -20,15 +27,15 @@ export class View {
     this.el = el;
   }
 
-  update(_data?: Record<string, unknown>): HTMLElement {
+  update(_data?: T): HTMLElement {
     return this.el;
   }
 }
 
 interface Slottable {
-  template(props?: any): string;
+  template(props?: any): SafeHTML;
 }
 
-export function slot<T extends Slottable>(target: T, ...args: Parameters<T['template']>): string {
+export function slot<T extends Slottable>(target: T, ...args: Parameters<T['template']>): SafeHTML {
   return target.template(...args);
 }

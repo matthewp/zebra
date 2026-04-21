@@ -1,6 +1,6 @@
 ---
 name: zebra
-description: Create view components using the Zebra pattern — a class-based, convention-driven vanilla JavaScript view framework with minimal library code. Use when asked to create a view, component, or UI element using Zebra.
+description: Work with the Zebra framework — a class-based, convention-driven vanilla JavaScript view framework. Use when creating, editing, or refactoring views, components, lists, or UI elements that use Zebra, or when code imports from '@matthewp/zebra'.
 ---
 
 # Zebra
@@ -13,7 +13,7 @@ Each view is a class that extends `View`. Methods and properties should appear i
 
 1. **State fields** — class field declarations for state
 2. **constructor** — calls `super()`, creates child views (no DOM work here)
-3. **template(props?)** — returns an HTML string, can embed child views via `slot()`
+3. **template(props?)** — returns `SafeHTML` using the `html` tagged template literal
 4. **mount(el)** — calls `super.mount(el)`, caches DOM references, mounts child views, attaches event listeners, sets initial state
 5. **State setters** — `setFoo(value)` methods that guard against unnecessary updates
 6. **Event handlers** — `onFooClick()` etc.
@@ -27,36 +27,42 @@ Zebra provides a minimal `View` base class:
 
 ```javascript
 class View {
-  createElement() {
-    let tpl = document.createElement('template');
-    tpl.innerHTML = this.template();
-    this.el = tpl.content.firstElementChild;
-    return this.el;
-  }
-
-  createAndMount() {
-    this.mount(this.createElement());
-  }
-
-  template(props) { return ''; }
-
+  createElement() { /* parses template once per class, clones DOM per instance */ }
+  createAndMount() { this.mount(this.createElement()); }
+  template(props) { return html``; }
   mount(el) { this.el = el; }
-
   update(data = {}) { return this.el; }
 }
 ```
 
 ### Key methods
 
-- **`createElement()`** — creates DOM from `template()`, sets `this.el`. Only called for root views or views not embedded via `slot()`.
+- **`createElement()`** — parses `template()` into DOM once per class (cached on the constructor), then `cloneNode`s the cached element for each instance. Only called for root views or views not embedded via slot.
 - **`createAndMount()`** — shorthand for `createElement()` + `mount()`. Used when creating a fresh view on the client.
-- **`template(props?)`** — returns an HTML string. Can accept props for SSR data interpolation. Use `slot()` to embed child views.
-- **`mount(el)`** — wires up the view to a DOM element. Must call `super.mount(el)` first. Queries nodes, mounts children, attaches listeners.
+- **`template(props?)`** — returns `SafeHTML`. Called once per class to build the template cache; props are only used for SSR. Write it as a compact single-line string — **no whitespace between elements** (whitespace creates extra text nodes in every clone). For elements whose text content will be set dynamically, put a single space placeholder so a text node already exists in every clone.
+- **`mount(el)`** — wires up the view to a DOM element. Must call `super.mount(el)` first. For dynamic text cells, cache the **text node** (`el.querySelector('.foo').firstChild`) not the element — this allows in-place `.data` mutation in setters.
 - **`update(data)`** — receives props, calls setters, returns `this.el`.
+
+### Setters update text nodes, not elements
+
+Cache a reference to the text node in `mount()`, then update via `.data` in the setter. Setting `.textContent` on an element destroys and recreates its text node on every call; `.data` on a text node mutates it in place.
+
+```javascript
+// mount: cache the text node
+this.nameText = el.querySelector('.name').firstChild;
+
+// setter: in-place mutation
+setName(value) {
+  if (this.name !== value) {
+    this.name = value;
+    this.nameText.data = value;
+  }
+}
+```
 
 ### Mounting and hydration
 
-`mount(el)` works the same whether the DOM was just created by `createElement()` or already exists from SSR — `querySelector` works identically in both cases. This means there's no separate "hydrate" concept. The caller decides the source of the element:
+`mount(el)` works the same whether the DOM was just created by `createElement()` or already exists from SSR — `querySelector` works identically in both cases. There is no separate "hydrate" concept:
 
 ```javascript
 // Fresh client render
@@ -67,6 +73,41 @@ document.querySelector('#app').append(app.el);
 // Hydrate from SSR
 let app = new App();
 app.mount(document.querySelector('#app > .app'));
+```
+
+## The `html` Tagged Template Literal
+
+Use the `html` tagged template literal from `@matthewp/zebra` for all templates. It automatically HTML-escapes interpolated values, preventing XSS:
+
+```javascript
+import { View, html } from '@matthewp/zebra';
+
+class UserCard extends View {
+  template(props) {
+    // props.bio is escaped automatically — no manual escaping needed
+    return html`<div class="card"><p class="bio">${props?.bio ?? ''}</p></div>`;
+  }
+}
+```
+
+### Interpolation behavior
+
+- **Strings and numbers** — automatically HTML-escaped (`<script>` becomes `&lt;script&gt;`)
+- **`null`, `undefined`, `false`** — render as empty string
+- **View or List instances** — automatically rendered via `.template()` (no need for `slot()`)
+- **`SafeHTML` values** (from `html` or `unsafeHTML()`) — passed through without escaping
+- **Arrays** — each element resolved by the same rules and joined
+
+### Raw HTML escape hatch
+
+When you need to insert pre-rendered HTML (e.g. markdown output), use `unsafeHTML()`:
+
+```javascript
+import { html, unsafeHTML } from '@matthewp/zebra';
+
+template(props) {
+  return html`<div class="content">${unsafeHTML(props?.renderedMarkdown ?? '')}</div>`;
+}
 ```
 
 ## The Constructor
@@ -82,12 +123,12 @@ constructor() {
 
 Views without child views don't need a constructor at all.
 
-## Child Views and `slot()`
+## Child Views
 
-Use `slot()` to embed child views in a parent's template. The parent's `mount()` then mounts each child onto its portion of the DOM:
+Embed child views by interpolating them in the `html` template. The parent's `mount()` then mounts each child onto its portion of the DOM:
 
 ```javascript
-import { View, slot } from '@matthewp/zebra';
+import { View, html } from '@matthewp/zebra';
 import Avatar from './avatar.js';
 
 class UserCard extends View {
@@ -99,22 +140,19 @@ class UserCard extends View {
   }
 
   template() {
-    return `<div class="user-card">
-      <div class="avatar-container">${slot(this.avatar)}</div>
-      <span class="name"></span>
-    </div>`;
+    return html`<div class="user-card"><div class="avatar-container">${this.avatar}</div><span class="name"> </span></div>`;
   }
 
   mount(el) {
     super.mount(el);
-    this.nameNode = el.querySelector('.name');
+    this.nameText = el.querySelector('.name').firstChild;
     this.avatar.mount(el.querySelector('.avatar'));
   }
 
   setName(value) {
     if (this.name !== value) {
       this.name = value;
-      this.nameNode.textContent = value;
+      this.nameText.data = value;
     }
   }
 
@@ -125,7 +163,9 @@ class UserCard extends View {
 }
 ```
 
-`slot(view, props?)` calls `view.template(props)` and returns the HTML string. On the server, this recursively renders the full view tree as a string. On the client, the parent's DOM already contains the child's HTML from `template()`, so `mount()` just finds it with `querySelector` — no appending needed.
+Interpolating a View calls its `template()` and embeds the resulting HTML. On the server, this recursively renders the full view tree as a string. On the client, the parent's DOM already contains the child's HTML, so `mount()` just finds it with `querySelector`.
+
+`slot(view, props?)` is available from `@matthewp/zebra` for when you need to pass arguments to a child's `template()` — most commonly for passing items to a `List` for SSR. For child views without args, just interpolate directly.
 
 ## Server-Side Rendering
 
@@ -140,11 +180,11 @@ let html = renderToString(app);
 // Returns full HTML string — no DOM required
 ```
 
-`template()` can accept props to interpolate data for SSR:
+`template()` can accept props to interpolate data for SSR. Values are automatically escaped:
 
 ```javascript
 template(props) {
-  return `<span class="name">${props?.name ?? ''}</span>`;
+  return html`<span class="name">${props?.name ?? ''}</span>`;
 }
 ```
 
@@ -153,27 +193,26 @@ On the client, `template()` is called with no args (empty/default values), and s
 ## Complete Example
 
 ```javascript
-import { View } from '@matthewp/zebra';
+import { View, html } from '@matthewp/zebra';
 
 class Greeting extends View {
-  // State
   name = undefined;
 
-  template(props) {
-    return `<div class="greeting">
-      Hello <span class="name">${props?.name ?? 'world'}</span>!
-    </div>`;
+  // Compact template, space seeds the text node for .data updates
+  template() {
+    return html`<div class="greeting">Hello <span class="name"> </span>!</div>`;
   }
 
   mount(el) {
     super.mount(el);
-    this.nameNode = el.querySelector('.name');
+    // Cache the text node, not the element
+    this.nameText = el.querySelector('.name').firstChild;
   }
 
   setName(value) {
     if (this.name !== value) {
       this.name = value;
-      this.nameNode.textContent = value;
+      this.nameText.data = value;  // in-place, no node recreation
     }
   }
 
@@ -189,24 +228,19 @@ export default Greeting;
 ## Example with Events (Counter)
 
 ```javascript
-import { View } from '@matthewp/zebra';
+import { View, html } from '@matthewp/zebra';
 
 class Counter extends View {
-  // State
   count = undefined;
   min = 0;
 
   template() {
-    return `<div class="counter">
-      <button class="decrement">-</button>
-      <span class="count">0</span>
-      <button class="increment">+</button>
-    </div>`;
+    return html`<div class="counter"><button class="decrement">-</button><span class="count"> </span><button class="increment">+</button></div>`;
   }
 
   mount(el) {
     super.mount(el);
-    this.countNode = el.querySelector('.count');
+    this.countText = el.querySelector('.count').firstChild;
     this.incrementNode = el.querySelector('.increment');
     this.decrementNode = el.querySelector('.decrement');
 
@@ -219,7 +253,7 @@ class Counter extends View {
   setCount(value) {
     if (this.count !== value) {
       this.count = value;
-      this.countNode.textContent = value;
+      this.countText.data = value;
     }
   }
 
@@ -301,10 +335,10 @@ let list = new List(ItemView, item => item.id);
 - **First argument**: the View subclass to instantiate for each item
 - **Second argument**: a key function that returns a unique identifier for each item
 
-Embed the list in a parent template with `slot()`, and mount it in `mount()`:
+Embed the list in a parent template by interpolation, and mount it in `mount()`:
 
 ```javascript
-import { View, slot } from '@matthewp/zebra';
+import { View, slot, html } from '@matthewp/zebra';
 import { List } from '@matthewp/zebra/list';
 import TodoItem from './todo-item.js';
 
@@ -315,7 +349,7 @@ class TodoList extends View {
   }
 
   template(props) {
-    return `<ul class="todo-list">${slot(this.list, props?.todos)}</ul>`;
+    return html`<ul class="todo-list">${this.list.template(props?.todos)}</ul>`;
   }
 
   mount(el, todos) {
@@ -334,11 +368,21 @@ class TodoList extends View {
 }
 ```
 
-- **`list.template(items)`** — renders all items as HTML strings (for SSR via `slot()`)
+- **`list.template(items)`** — renders all items as HTML strings (for SSR)
 - **`list.mount(container, items?)`** — adopts existing child elements in the container, hydrating a view for each one
 - **`list.update(items)`** — reconciles the list: creates new views, updates existing ones, removes stale ones, reorders with minimal DOM moves
 
 Each item in the array is passed to the child view's `update()` method. The key function determines identity — items with the same key are updated in place rather than recreated.
+
+**Pass object references, not copies.** `List.update()` uses referential equality (`===`) to skip `update()` calls on unchanged items. Only create new object references for items that actually changed:
+
+```javascript
+// Good — unchanged items keep the same reference; List skips their update()
+rows[i] = { ...rows[i], label: rows[i].label + ' !!!' };
+
+// Bad — every item gets a new reference; List calls update() on all of them
+rows = rows.map(row => ({ ...row }));
+```
 
 ## Critical Rules
 
@@ -347,6 +391,7 @@ Each item in the array is passed to the child view's `update()` method. The key 
 - DOM nodes should only be modified through their corresponding setter method
 - State should only be modified through setter methods
 - This makes it easy to debug — set a breakpoint in a setter to see every call site
+- **Never manipulate a child view's DOM directly** — all communication with child views must go through their `update()` method. Don't touch `view.el.classList`, `view.someNode`, etc. from the parent. If the child needs new behavior, add a setter and wire it through `update()`.
 
 ### Props Down, Events Up
 
@@ -356,13 +401,13 @@ Each item in the array is passed to the child view's `update()` method. The key 
 
 ### Conditional Updates
 
-Always check if values changed in setters:
+Always guard setters with an equality check:
 
 ```javascript
 setName(value) {
   if (this.name !== value) {
     this.name = value;
-    this.nameNode.textContent = value;
+    this.nameText.data = value;
   }
 }
 ```
@@ -397,10 +442,10 @@ When the project uses TypeScript, add types for the public interface and DOM que
 
 ### What to type explicitly
 
-**DOM node properties** — `querySelector` returns `Element | null`, so cast:
+**DOM node properties** — declare as `Text` for text nodes, element types for everything else:
 
 ```typescript
-countNode!: HTMLSpanElement;
+nameText!: Text;
 incrementNode!: HTMLButtonElement;
 ```
 
@@ -409,7 +454,8 @@ incrementNode!: HTMLButtonElement;
 ```typescript
 mount(el: HTMLElement) {
   super.mount(el);
-  this.countNode = el.querySelector('.count') as HTMLSpanElement;
+  this.nameText = el.querySelector('.name')!.firstChild as Text;
+  this.incrementNode = el.querySelector('.increment') as HTMLButtonElement;
 }
 ```
 
@@ -428,14 +474,23 @@ update(data: { count?: number } = {}) {
 - Return types on methods
 - State field types (when initialized)
 
+## Performance Notes
+
+Zebra's template mechanism parses `template()` HTML once per class and `cloneNode`s the result for every instance — so creation cost scales only with clone size, not with parsing. The patterns shown throughout this document keep that cost minimal:
+
+- **Compact templates** (no whitespace between elements) avoid extra text nodes in every clone. For 1000 list rows, even 4 extra text nodes per row is 4000 extra DOM nodes affecting layout and paint.
+- **Space placeholders + `.data`** avoid the DOM churn of `textContent` (which removes all children and creates a new text node on every call). `.data` on a pre-existing text node mutates it in place.
+
+**Direct DOM traversal** (`firstChild`/`nextSibling` instead of `querySelector`) removes measurable overhead from `mount()` in views that are created thousands of times in tight loops. Use it only when profiling confirms a bottleneck — `querySelector` is preferred for readability everywhere else.
+
 ## When Creating Views
 
 1. **Detect file extension**: Check for `tsconfig.json` or existing `.ts` files. Use `.ts` if found, otherwise `.js`
-2. Start with the template HTML structure
-3. Identify which elements need dynamic updates
-4. Create state properties for each piece of dynamic data
+2. Start with the template HTML — write it as a compact single-line string, no whitespace between elements
+3. For elements whose text content is dynamic, put a single space in them so a text node is seeded
+4. Create state field declarations for each piece of dynamic data
 5. If the view has children: write a constructor that creates them after `super()`
-6. Use `slot()` in the template to embed child views
-7. In `mount()`: call `super.mount(el)`, query DOM nodes, mount child views, attach event listeners
-8. Create setter methods that check for changes and update DOM
-9. Wire up the update method to receive props
+6. Use `html` tagged template literal — child views embedded by interpolation, `slot()` for lists with data
+7. In `mount()`: call `super.mount(el)`, cache **text node** references (`.querySelector('.foo').firstChild`) for dynamic cells, mount child views, attach event listeners
+8. Write setter methods that guard with `!==` and update via `.data` on text nodes
+9. Wire up `update(data)` to call the setters
