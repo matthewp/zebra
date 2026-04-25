@@ -318,6 +318,87 @@ mount(el) {
 }
 ```
 
+## Data Loading
+
+Zebra uses a `DataEvent` — a subclass of `Event` — to let views declare their data needs without coupling to a specific data layer. Events bubble up through the DOM; any ancestor can respond.
+
+### DataEvent
+
+```javascript
+class DataEvent extends Event {
+  constructor(type, request) {
+    super(type, { bubbles: true });
+    this.request = request;
+    this.promise = null;
+  }
+
+  respondWith(promise) {
+    this.promise = promise;
+  }
+
+  handled() {
+    if (!this.promise) throw new Error(`DataEvent "${this.type}" was not handled by any ancestor`);
+    return this.promise;
+  }
+}
+```
+
+### Dispatching
+
+Dispatch a `DataEvent` in `mount()`, then chain off `handled()`. Set a loading state before dispatching and clear it when data arrives:
+
+```javascript
+mount(el) {
+  super.mount(el);
+  this.nameText = el.querySelector('.name').firstChild;
+
+  this.setLoading(true);
+  const e = new DataEvent('data:user', { id: this.userId });
+  el.dispatchEvent(e);
+  e.handled().then(data => {
+    this.setLoading(false);
+    this.update(data);
+  });
+}
+```
+
+### Responding
+
+Any ancestor responds in its `mount()` by listening for the event and calling `respondWith()`. Call `e.stopPropagation()` so only one ancestor handles it:
+
+```javascript
+mount(el) {
+  super.mount(el);
+  el.addEventListener('data:user', e => {
+    e.respondWith(fetchUser(e.request.id));
+    e.stopPropagation();
+  });
+}
+```
+
+### Eager child mounting
+
+To avoid sequential fetching, mount children immediately in `mount()` — before the parent has data. Children dispatch their own `DataEvent`s right away, so their fetches run in parallel with the parent's:
+
+```javascript
+mount(el) {
+  super.mount(el);
+  // Mount children eagerly — their DataEvents fire immediately, in parallel
+  this.header.mount(el.querySelector('.header'));
+  this.sidebar.mount(el.querySelector('.sidebar'));
+
+  const e = new DataEvent('data:page', { id: this.pageId });
+  el.dispatchEvent(e);
+  e.handled().then(data => this.update(data));
+}
+```
+
+This works when children are structurally known ahead of time. If a child's identity depends on parent data (e.g. a list of items fetched from the server), fetching is necessarily sequential — dispatch the child's `DataEvent` after the parent's resolves.
+
+### SSR
+
+`DataEvent` is client-only — there is no DOM to bubble through on the server. For SSR, pass data directly as props to `renderToString()` and `template()`.
+
 ## Lists
 
 For dynamic lists of child views, use the `List` class from `@matthewp/zebra/list`. It handles creating, updating, reordering, and removing child views efficiently using a keyed reconciliation algorithm that minimizes DOM operations.
