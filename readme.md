@@ -39,7 +39,7 @@ new Counter().mount(document.querySelector('#app'));
 
 - **No template DSL.** Views are plain classes. `render()` builds DOM with element wrappers and returns the root.
 - **Signals, not virtual DOM.** Reactivity flows through [alien-signals](https://github.com/stackblitz/alien-signals); effects update only the nodes that depend on a changed signal.
-- **Same code, server or client.** `view.toString()` produces HTML strings without touching a DOM. `view.mount(el)` builds and attaches real DOM.
+- **Same code, server or client.** `view.toString()` produces HTML strings without touching a DOM; `view.mount(el)` builds and attaches real DOM; `view.hydrate(el)` adopts SSR'd HTML and wires it up.
 - **Typed DOM access.** Reach for `getValue()`, `setChecked()`, `isFocused()`, `measure()` — `view.el` is rarely needed.
 
 ## Manual install
@@ -51,7 +51,7 @@ npm install @matthewp/zebra
 ## Concepts
 
 - **`Element`** wraps a tag (`Div`, `Span`, `Button`, ...). Build a tree with `.append()`, style it with `.addClass()` / `.setStyle()`, attach handlers with `.on()`.
-- **`View`** is a component class. Override `render()` to return an `Element`. Mount with `view.mount(domEl)` or embed inside another view's render via `parent.append(view)`.
+- **`View`** is a component class. Override `render()` to return an `Element`. Mount with `view.mount(domEl)`, hydrate SSR'd HTML with `view.hydrate(el)`, or embed inside another view's render via `parent.append(view)`.
 - **`signal(v)`** holds reactive state. `count()` reads, `count(v)` writes.
 - **`effect(fn)`** re-runs `fn` whenever any signal it read changes — used to update the DOM from state.
 - **`List`** (`@matthewp/zebra/list`) handles dynamic lists with keyed reconciliation; takes a signal of items, a key fn, and a factory.

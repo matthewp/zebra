@@ -353,9 +353,9 @@ row.append(cells);
 
 `Fragment` does not have its own DOM after mount — its children are adopted by the parent. It's a build-time grouping.
 
-## Server-side rendering
+## Server-side rendering & hydration
 
-Same code, no DOM needed:
+Same code, no DOM needed on the server:
 
 ```javascript
 import { App } from './app.ts';
@@ -364,9 +364,36 @@ const html = new App().toString();
 // '<div class="app">...</div>'
 ```
 
-`toString()` walks the element tree without ever calling `document.createElement`. It's safe to call on Node.js with no DOM shim.
+`toString()` walks the element tree without ever calling `document.createElement`. Safe to call on Node.js with no DOM shim.
 
-Hydration (client-side mount onto SSR'd HTML) is not currently provided — `mount()` builds fresh DOM and appends. For now, SSR is best for static HTML output or HTML responses where the client re-renders.
+### Hydration
+
+On the client, **don't call `mount()` if SSR'd HTML is already on the page** — that would build fresh DOM and double-render. Use `hydrate(el)` instead. It runs `render()` (so effects get set up), then walks the existing DOM in parallel and adopts each node, attaching event listeners as it goes.
+
+```javascript
+const app = new App();
+const existing = document.querySelector('#app').firstElementChild;
+if (existing) {
+  app.hydrate(existing);
+} else {
+  app.mount(document.querySelector('#app'));
+}
+```
+
+After hydrate, the view is fully reactive — signals propagate through effects to update the live DOM, just like with `mount()`.
+
+### How hydration works
+
+`render()` is deterministic: given the same initial signal values, it builds the same tree on server and client. Server's `toString()` and client's `hydrate()` walk that tree in lockstep:
+- For each `Element` child, claim the next DOM child as its `el` and recurse.
+- For each string child, claim a text node and advance.
+- Listeners attached via `.on()` are wired to the adopted DOM node (the server HTML didn't have them).
+
+This means **render must be deterministic across server and client** — same signals, same render output. Don't read from `Date.now()`, `Math.random()`, or browser-only APIs inside `render()` unless you're prepared for hydration mismatches.
+
+### What's not yet supported
+
+`hydrate()` doesn't currently handle `Fragment` or `RawHTML` nodes — it throws a clear error if it hits one. For trees containing those, fall back to `mount()`.
 
 ## Critical Rules
 
@@ -453,6 +480,7 @@ Children expose `update(data)` for parents to push state down (used by `List`). 
 | `clear()` | Remove all children |
 | `disable()` / `enable()` | Toggle `disabled` attr |
 | `mount(container)` | Build DOM and append to container |
+| `hydrate(el)` | Adopt existing DOM (from SSR) — bind `el`, attach listeners, recurse into children |
 | `toDOM()` / `toString()` | Build DOM / serialize to HTML string |
 
 On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to element children.

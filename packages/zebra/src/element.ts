@@ -296,6 +296,34 @@ export class Element extends Node {
     return this;
   }
 
+  hydrate(el: HTMLElement): this {
+    if (this.el) return this;
+    this.el = el;
+
+    for (const [event, handler] of this._listeners) {
+      el.addEventListener(event, handler);
+    }
+
+    let cursor: ChildNode | null = el.firstChild;
+    for (const child of this._children) {
+      if (typeof child === 'string') {
+        if (!cursor || cursor.nodeType !== 3) {
+          throw new Error(`Hydration mismatch in <${this._tag}>: expected text node`);
+        }
+        cursor = cursor.nextSibling;
+      } else if (child instanceof Element) {
+        if (!cursor || cursor.nodeType !== 1) {
+          throw new Error(`Hydration mismatch in <${this._tag}>: expected element <${(child as Element)._tag}>`);
+        }
+        child.hydrate(cursor as HTMLElement);
+        cursor = cursor.nextSibling;
+      } else {
+        throw new Error(`Hydration not supported for ${child.constructor.name} children yet`);
+      }
+    }
+    return this;
+  }
+
   toDOM(): HTMLElement {
     if (this.el) return this.el;
 

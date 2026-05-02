@@ -116,6 +116,13 @@ export class View extends Element {
     return el;
   }
 
+  hydrate(el: HTMLElement): this {
+    if (this.el) return this;
+    this._getRendered().hydrate(el);
+    this.el = el;
+    return this;
+  }
+
   toString(): string {
     return this._getRendered().toString();
   }

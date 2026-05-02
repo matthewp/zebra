@@ -1,3 +1,44 @@
-import { defineConfig } from 'vite';
+import { defineConfig, createServerModuleRunner } from 'vite';
+import type { Plugin, Connect } from 'vite';
 
-export default defineConfig({});
+function ssrPlugin(): Plugin {
+  return {
+    name: 'zebra-ssr',
+    configureServer(server) {
+      const runner = createServerModuleRunner(server.environments.ssr);
+
+      server.middlewares.use(async (req: Connect.IncomingMessage, res, next) => {
+        if (req.url !== '/') return next();
+
+        try {
+          const { App } = await runner.import('/src/app.ts');
+          const app = new App();
+          const body = app.toString();
+
+          const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zebra Playground</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">${body}</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>`;
+
+          res.setHeader('Content-Type', 'text/html');
+          res.end(html);
+        } catch (e) {
+          next(e);
+        }
+      });
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [ssrPlugin()],
+});
