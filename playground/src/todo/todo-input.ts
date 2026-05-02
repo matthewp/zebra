@@ -1,36 +1,26 @@
-import { View } from '@matthewp/zebra';
+import { View, Form, Input, Button, type Element } from '@matthewp/zebra';
 
 export class TodoInput extends View {
-  inputNode!: HTMLInputElement;
+  render(): Element {
+    const root = new Form().addClass('todo-input');
+    const input = new Input()
+      .addClass('todo-text')
+      .setAttribute('type', 'text')
+      .setAttribute('placeholder', 'What needs to be done?');
+    const submit = new Button().setAttribute('type', 'submit').setText('Add');
 
-  template() {
-    return `<form class="todo-input">
-      <input class="todo-text" type="text" placeholder="What needs to be done?">
-      <button type="submit">Add</button>
-    </form>`;
-  }
+    root.append(input, submit);
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.inputNode = el.querySelector('.todo-text') as HTMLInputElement;
+    root.on('submit', (e) => {
+      e.preventDefault();
+      const text = input.getValue().trim();
+      if (text) {
+        root.emit('add', { text });
+        input.setValue('');
+      }
+    });
 
-    el.addEventListener('submit', (e) => this.onSubmit(e));
-  }
-
-  onSubmit(e: Event) {
-    e.preventDefault();
-    let text = this.inputNode.value.trim();
-    if (text) {
-      this.el.dispatchEvent(new CustomEvent('add', {
-        detail: { text },
-        bubbles: true,
-      }));
-      this.inputNode.value = '';
-    }
-  }
-
-  update() {
-    return this.el;
+    return root;
   }
 }
 

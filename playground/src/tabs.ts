@@ -1,4 +1,4 @@
-import { View, slot } from '@matthewp/zebra';
+import { View, Div, Nav, Button, signal, effect, type Element } from '@matthewp/zebra';
 
 interface Tab {
   label: string;
@@ -6,78 +6,59 @@ interface Tab {
 }
 
 export class Tabs extends View {
-  activeIndex = 0;
-  tabs: Tab[] = [];
+  activeIndex = signal(0);
+  tabs: Tab[];
 
-  navNode!: HTMLElement;
-  indicatorNode!: HTMLElement;
-  contentNode!: HTMLElement;
+  private buttons: Button[] = [];
+  private indicator: Div | null = null;
 
   constructor(tabs: Tab[]) {
     super();
     this.tabs = tabs;
   }
 
-  template() {
-    return `<div class="tabs">
-      <nav class="tabs-nav">
-        ${this.tabs.map((tab, i) =>
-          `<button class="tab-btn${i === 0 ? ' active' : ''}" type="button">${tab.label}</button>`
-        ).join('')}
-        <div class="tabs-indicator"></div>
-      </nav>
-      <div class="tabs-content">
-        ${slot(this.tabs[0].view)}
-      </div>
-    </div>`;
-  }
+  render(): Element {
+    const root = new Div().addClass('tabs');
+    const nav = new Nav().addClass('tabs-nav');
+    const indicator = new Div().addClass('tabs-indicator');
+    const content = new Div().addClass('tabs-content');
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.navNode = el.querySelector('.tabs-nav') as HTMLElement;
-    this.indicatorNode = el.querySelector('.tabs-indicator') as HTMLElement;
-    this.contentNode = el.querySelector('.tabs-content') as HTMLElement;
+    this.indicator = indicator;
 
-    let buttons = this.navNode.querySelectorAll('.tab-btn');
-    for (let i = 0; i < buttons.length; i++) {
-      buttons[i].addEventListener('click', () => this.onTabClick(i));
-    }
+    this.buttons = this.tabs.map((tab, i) => {
+      const btn = new Button().addClass('tab-btn').setAttribute('type', 'button').setText(tab.label);
+      btn.on('click', () => this.activeIndex(i));
+      nav.append(btn);
+      return btn;
+    });
+    nav.append(indicator);
 
-    // Mount the initially active tab from existing DOM
-    this.tabs[0].view.mount(this.contentNode.firstElementChild as HTMLElement);
-    this.positionIndicator(0);
-  }
-
-  positionIndicator(index: number) {
-    let btn = this.navNode.querySelectorAll('.tab-btn')[index] as HTMLElement;
-    this.indicatorNode.style.left = btn.offsetLeft + 'px';
-    this.indicatorNode.style.width = btn.offsetWidth + 'px';
-  }
-
-  setActiveIndex(value: number) {
-    if (this.activeIndex !== value) {
-      this.activeIndex = value;
-
-      let buttons = this.navNode.querySelectorAll('.tab-btn');
-      for (let i = 0; i < buttons.length; i++) {
-        buttons[i].classList.toggle('active', i === value);
+    effect(() => {
+      const idx = this.activeIndex();
+      for (let i = 0; i < this.buttons.length; i++) {
+        this.buttons[i].toggleClass('active', i === idx);
       }
+      content.clear().append(this.tabs[idx].view);
+      this.positionIndicator(idx);
+    });
 
-      let view = this.tabs[value].view;
-      if (!view.el) {
-        view.createAndMount();
-      }
-      this.contentNode.replaceChildren(view.el);
-      this.positionIndicator(value);
-    }
+    root.append(nav, content);
+    return root;
   }
 
-  onTabClick(index: number) {
-    this.setActiveIndex(index);
+  mount(container: HTMLElement): this {
+    super.mount(container);
+    this.positionIndicator(this.activeIndex());
+    return this;
   }
 
-  update() {
-    return this.el;
+  private positionIndicator(index: number) {
+    const btn = this.buttons[index];
+    const m = btn?.measure(el => ({ left: el.offsetLeft, width: el.offsetWidth }));
+    if (!m || !this.indicator) return;
+    this.indicator
+      .setStyle('left', m.left + 'px')
+      .setStyle('width', m.width + 'px');
   }
 }
 

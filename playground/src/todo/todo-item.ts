@@ -1,4 +1,4 @@
-import { View } from '@matthewp/zebra';
+import { View, Li, Input, Span, Button, signal, effect, type Element } from '@matthewp/zebra';
 
 export interface Todo {
   id: number;
@@ -7,73 +7,46 @@ export interface Todo {
 }
 
 export class TodoItem extends View {
-  id = -1;
-  text = '';
-  done = false;
+  todo: ReturnType<typeof signal<Todo>>;
 
-  checkboxNode!: HTMLInputElement;
-  textNode!: HTMLSpanElement;
-  deleteNode!: HTMLButtonElement;
-
-  template(props?: Partial<Todo>) {
-    let done = props?.done ?? false;
-    return `<li class="todo-item${done ? ' completed' : ''}">
-      <input class="todo-checkbox" type="checkbox"${done ? ' checked' : ''}>
-      <span class="todo-item-text">${props?.text ?? ''}</span>
-      <button class="todo-delete" type="button">&times;</button>
-    </li>`;
+  constructor(initialTodo: Todo) {
+    super();
+    this.todo = signal(initialTodo);
   }
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.checkboxNode = el.querySelector('.todo-checkbox') as HTMLInputElement;
-    this.textNode = el.querySelector('.todo-item-text') as HTMLSpanElement;
-    this.deleteNode = el.querySelector('.todo-delete') as HTMLButtonElement;
+  render(): Element {
+    const root = new Li().addClass('todo-item');
+    const checkbox = new Input().addClass('todo-checkbox').setAttribute('type', 'checkbox');
+    const text = new Span().addClass('todo-item-text');
+    const del = new Button()
+      .addClass('todo-delete')
+      .setAttribute('type', 'button')
+      .setText('×')
+      .on('click', () => this.onDelete());
 
-    this.checkboxNode.addEventListener('change', () => this.onToggle());
-    this.deleteNode.addEventListener('click', () => this.onDelete());
+    checkbox.on('change', () => this.onToggle());
+
+    effect(() => {
+      const t = this.todo();
+      text.setText(t.text);
+      checkbox.setChecked(t.done);
+      root.toggleClass('completed', t.done);
+    });
+
+    root.append(checkbox, text, del);
+    return root;
   }
 
-  setId(value: number) {
-    if (this.id !== value) {
-      this.id = value;
-    }
-  }
-
-  setText(value: string) {
-    if (this.text !== value) {
-      this.text = value;
-      this.textNode.textContent = value;
-    }
-  }
-
-  setDone(value: boolean) {
-    if (this.done !== value) {
-      this.done = value;
-      this.checkboxNode.checked = value;
-      this.el.classList.toggle('completed', value);
-    }
+  update(todo: Todo) {
+    this.todo(todo);
   }
 
   onToggle() {
-    this.el.dispatchEvent(new CustomEvent('todo-toggle', {
-      detail: { id: this.id },
-      bubbles: true,
-    }));
+    this.emit('todo-toggle', { id: this.todo().id });
   }
 
   onDelete() {
-    this.el.dispatchEvent(new CustomEvent('delete', {
-      detail: { id: this.id },
-      bubbles: true,
-    }));
-  }
-
-  update(data: Partial<Todo> = {}) {
-    if ('id' in data) this.setId(data.id!);
-    if ('text' in data) this.setText(data.text!);
-    if ('done' in data) this.setDone(data.done!);
-    return this.el;
+    this.emit('delete', { id: this.todo().id });
   }
 }
 

@@ -1,61 +1,29 @@
-import { View } from '@matthewp/zebra';
+import { View, Div, Label, Input, Output, signal, effect, type Element } from '@matthewp/zebra';
 
 export class FullName extends View {
-  first = '';
-  last = '';
+  first = signal('');
+  last = signal('');
 
-  firstNode!: HTMLInputElement;
-  lastNode!: HTMLInputElement;
-  outputNode!: HTMLOutputElement;
+  render(): Element {
+    const root = new Div().addClass('full-name');
 
-  template() {
-    return `<div class="full-name">
-      <label>First <input class="first" type="text"></label>
-      <label>Last <input class="last" type="text"></label>
-      <output class="output"></output>
-    </div>`;
-  }
+    const firstInput = new Input().addClass('first').setAttribute('type', 'text');
+    const firstLabel = new Label().append('First ', firstInput);
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.firstNode = el.querySelector('.first') as HTMLInputElement;
-    this.lastNode = el.querySelector('.last') as HTMLInputElement;
-    this.outputNode = el.querySelector('.output') as HTMLOutputElement;
+    const lastInput = new Input().addClass('last').setAttribute('type', 'text');
+    const lastLabel = new Label().append('Last ', lastInput);
 
-    this.firstNode.addEventListener('input', () => this.onFirstInput());
-    this.lastNode.addEventListener('input', () => this.onLastInput());
-  }
+    const output = new Output().addClass('output');
 
-  setFirst(value: string) {
-    if (this.first !== value) {
-      this.first = value;
-      this.updateOutput();
-    }
-  }
+    firstInput.on('input', () => this.first(firstInput.getValue()));
+    lastInput.on('input', () => this.last(lastInput.getValue()));
 
-  setLast(value: string) {
-    if (this.last !== value) {
-      this.last = value;
-      this.updateOutput();
-    }
-  }
+    effect(() => {
+      output.setText(`${this.first()} ${this.last()}`.trim());
+    });
 
-  updateOutput() {
-    this.outputNode.textContent = `${this.first} ${this.last}`.trim();
-  }
-
-  onFirstInput() {
-    this.setFirst(this.firstNode.value);
-  }
-
-  onLastInput() {
-    this.setLast(this.lastNode.value);
-  }
-
-  update(data: { first?: string; last?: string } = {}) {
-    if ('first' in data) this.setFirst(data.first!);
-    if ('last' in data) this.setLast(data.last!);
-    return this.el;
+    root.append(firstLabel, lastLabel, output);
+    return root;
   }
 }
 

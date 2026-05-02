@@ -1,4 +1,4 @@
-import { View } from '@matthewp/zebra';
+import { View, Div, Input, Ul, Li, signal, effect, type Element } from '@matthewp/zebra';
 
 const items = [
   'Apple', 'Apricot', 'Banana', 'Blueberry', 'Cherry',
@@ -9,48 +9,39 @@ const items = [
 ];
 
 export class SearchFilter extends View {
-  query = '';
+  query = signal('');
 
-  searchNode!: HTMLInputElement;
-  listNode!: HTMLElement;
-  itemNodes: HTMLLIElement[] = [];
+  render(): Element {
+    const root = new Div().addClass('search-filter');
 
-  template() {
-    return `<div class="search-filter">
-      <input class="search" type="text" placeholder="Filter fruits...">
-      <ul class="list">
-        ${items.map(item => `<li class="item">${item}</li>`).join('\n        ')}
-      </ul>
-    </div>`;
-  }
+    const search = new Input()
+      .addClass('search')
+      .setAttribute('type', 'text')
+      .setAttribute('placeholder', 'Filter fruits...');
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.searchNode = el.querySelector('.search') as HTMLInputElement;
-    this.listNode = el.querySelector('.list') as HTMLElement;
-    this.itemNodes = Array.from(this.listNode.querySelectorAll('.item')) as HTMLLIElement[];
+    const list = new Ul().addClass('list');
 
-    this.searchNode.addEventListener('input', () => this.onSearchInput());
-  }
+    const itemEls = items.map(name => {
+      const li = new Li().addClass('item').setText(name);
+      list.append(li);
+      return li;
+    });
 
-  setQuery(value: string) {
-    if (this.query !== value) {
-      this.query = value;
-      let lower = value.toLowerCase();
-      for (let node of this.itemNodes) {
-        let match = !lower || node.textContent!.toLowerCase().includes(lower);
-        node.style.display = match ? '' : 'none';
+    search.on('input', () => {
+      this.query(search.getValue());
+    });
+
+    effect(() => {
+      const lower = this.query().toLowerCase();
+      for (let i = 0; i < items.length; i++) {
+        const match = !lower || items[i].toLowerCase().includes(lower);
+        if (match) itemEls[i].show();
+        else itemEls[i].hide();
       }
-    }
-  }
+    });
 
-  onSearchInput() {
-    this.setQuery(this.searchNode.value);
-  }
-
-  update(data: { query?: string } = {}) {
-    if ('query' in data) this.setQuery(data.query!);
-    return this.el;
+    root.append(search, list);
+    return root;
   }
 }
 

@@ -4,20 +4,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/view.d.ts",
-      "default": "./dist/view.js"
-    },
-    "./html": {
-      "types": "./dist/html.d.ts",
-      "default": "./dist/html.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./list": {
       "types": "./dist/list.d.ts",
       "default": "./dist/list.js"
-    },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
     }
   },
   "files": [
@@ -28,5 +20,8 @@
   },
   "devDependencies": {
     "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "alien-signals": "^3.1.2"
   }
 }

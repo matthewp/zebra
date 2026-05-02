@@ -1,577 +1,510 @@
 ---
 name: zebra
-description: Work with the Zebra framework — a class-based, convention-driven vanilla JavaScript view framework. Use when creating, editing, or refactoring views, components, lists, or UI elements that use Zebra, or when code imports from '@matthewp/zebra'.
+description: Work with the Zebra framework — a class-based view framework using signals and imperative DOM construction. Use when creating, editing, or refactoring views, components, lists, or UI elements that use Zebra, or when code imports from '@matthewp/zebra'.
 ---
 
 # Zebra
 
-A class-based, convention-driven framework for building views using plain JavaScript with native browser APIs. Zebra emphasizes strict structure over abstraction, achieving maximum performance with minimal library code. Views work both client-side and server-side — the same `template()` method produces HTML strings for SSR and DOM elements for the client.
+Zebra is a class-based view framework. Views are plain classes; you build DOM trees by composing typed element wrappers (`Div`, `Span`, `Button`, etc.), wire reactivity with signals and effects, and the same code renders on the server (`toString()`) or the client (`mount()`).
 
-## Structure of a View
+The framework leans into imperative DOM construction. Instead of a template DSL, you call methods like `.append()`, `.addClass()`, `.setText()` to build a tree and `effect(() => ...)` to keep parts of it in sync with signals.
 
-Each view is a class that extends `View`. Methods and properties should appear in this order:
-
-1. **State fields** — class field declarations for state
-2. **constructor** — calls `super()`, creates child views (no DOM work here)
-3. **template(props?)** — returns `SafeHTML` using the `html` tagged template literal
-4. **mount(el)** — calls `super.mount(el)`, caches DOM references, mounts child views, attaches event listeners, sets initial state
-5. **State setters** — `setFoo(value)` methods that guard against unnecessary updates
-6. **Event handlers** — `onFooClick()` etc.
-7. **update(data)** — receives props from parent, calls setters, returns `this.el`
-
-This ordering is a core convention — follow it consistently across all views.
-
-## Base Class
-
-Zebra provides a minimal `View` base class:
+## Anatomy of a View
 
 ```javascript
-class View {
-  createElement() { /* parses template once per class, clones DOM per instance */ }
-  createAndMount() { this.mount(this.createElement()); }
-  template(props) { return html``; }
-  mount(el) { this.el = el; }
-  update(data = {}) { return this.el; }
-}
-```
-
-### Key methods
-
-- **`createElement()`** — parses `template()` into DOM once per class (cached on the constructor), then `cloneNode`s the cached element for each instance. Only called for root views or views not embedded via slot.
-- **`createAndMount()`** — shorthand for `createElement()` + `mount()`. Used when creating a fresh view on the client.
-- **`template(props?)`** — returns `SafeHTML`. Called once per class to build the template cache; props are only used for SSR. Write it as a compact single-line string — **no whitespace between elements** (whitespace creates extra text nodes in every clone). For elements whose text content will be set dynamically, put a single space placeholder so a text node already exists in every clone.
-- **`mount(el)`** — wires up the view to a DOM element. Must call `super.mount(el)` first. For dynamic text cells, cache the **text node** (`el.querySelector('.foo').firstChild`) not the element — this allows in-place `.data` mutation in setters.
-- **`update(data)`** — receives props, calls setters, returns `this.el`.
-
-### Setters update text nodes, not elements
-
-Cache a reference to the text node in `mount()`, then update via `.data` in the setter. Setting `.textContent` on an element destroys and recreates its text node on every call; `.data` on a text node mutates it in place.
-
-```javascript
-// mount: cache the text node
-this.nameText = el.querySelector('.name').firstChild;
-
-// setter: in-place mutation
-setName(value) {
-  if (this.name !== value) {
-    this.name = value;
-    this.nameText.data = value;
-  }
-}
-```
-
-### Mounting and hydration
-
-`mount(el)` works the same whether the DOM was just created by `createElement()` or already exists from SSR — `querySelector` works identically in both cases. There is no separate "hydrate" concept:
-
-```javascript
-// Fresh client render
-let app = new App();
-app.createAndMount();
-document.querySelector('#app').append(app.el);
-
-// Hydrate from SSR
-let app = new App();
-app.mount(document.querySelector('#app > .app'));
-```
-
-## The `html` Tagged Template Literal
-
-Use the `html` tagged template literal from `@matthewp/zebra` for all templates. It automatically HTML-escapes interpolated values, preventing XSS:
-
-```javascript
-import { View, html } from '@matthewp/zebra';
-
-class UserCard extends View {
-  template(props) {
-    // props.bio is escaped automatically — no manual escaping needed
-    return html`<div class="card"><p class="bio">${props?.bio ?? ''}</p></div>`;
-  }
-}
-```
-
-### Interpolation behavior
-
-- **Strings and numbers** — automatically HTML-escaped (`<script>` becomes `&lt;script&gt;`)
-- **`null`, `undefined`, `false`** — render as empty string
-- **View or List instances** — automatically rendered via `.template()` (no need for `slot()`)
-- **`SafeHTML` values** (from `html` or `unsafeHTML()`) — passed through without escaping
-- **Arrays** — each element resolved by the same rules and joined
-
-### Raw HTML escape hatch
-
-When you need to insert pre-rendered HTML (e.g. markdown output), use `unsafeHTML()`:
-
-```javascript
-import { html, unsafeHTML } from '@matthewp/zebra';
-
-template(props) {
-  return html`<div class="content">${unsafeHTML(props?.renderedMarkdown ?? '')}</div>`;
-}
-```
-
-## The Constructor
-
-The constructor creates child view instances but does no DOM work:
-
-```javascript
-constructor() {
-  super();
-  this.avatar = new Avatar();
-}
-```
-
-Views without child views don't need a constructor at all.
-
-## Child Views
-
-Embed child views by interpolating them in the `html` template. The parent's `mount()` then mounts each child onto its portion of the DOM:
-
-```javascript
-import { View, html } from '@matthewp/zebra';
-import Avatar from './avatar.js';
-
-class UserCard extends View {
-  name = undefined;
-
-  constructor() {
-    super();
-    this.avatar = new Avatar();
-  }
-
-  template() {
-    return html`<div class="user-card"><div class="avatar-container">${this.avatar}</div><span class="name"> </span></div>`;
-  }
-
-  mount(el) {
-    super.mount(el);
-    this.nameText = el.querySelector('.name').firstChild;
-    this.avatar.mount(el.querySelector('.avatar'));
-  }
-
-  setName(value) {
-    if (this.name !== value) {
-      this.name = value;
-      this.nameText.data = value;
-    }
-  }
-
-  update(data = {}) {
-    if ('name' in data) this.setName(data.name);
-    return this.el;
-  }
-}
-```
-
-Interpolating a View calls its `template()` and embeds the resulting HTML. On the server, this recursively renders the full view tree as a string. On the client, the parent's DOM already contains the child's HTML, so `mount()` just finds it with `querySelector`.
-
-`slot(view, props?)` is available from `@matthewp/zebra` for when you need to pass arguments to a child's `template()` — most commonly for passing items to a `List` for SSR. For child views without args, just interpolate directly.
-
-## Server-Side Rendering
-
-The same `template()` that renders client-side HTML works for SSR. Use `renderToString()` from `@matthewp/zebra/server`:
-
-```javascript
-import { renderToString } from '@matthewp/zebra/server';
-import App from './app.js';
-
-let app = new App();
-let html = renderToString(app);
-// Returns full HTML string — no DOM required
-```
-
-`template()` can accept props to interpolate data for SSR. Values are automatically escaped:
-
-```javascript
-template(props) {
-  return html`<span class="name">${props?.name ?? ''}</span>`;
-}
-```
-
-On the client, `template()` is called with no args (empty/default values), and setters fill in data after `mount()`. On the server, props provide the data directly.
-
-## Complete Example
-
-```javascript
-import { View, html } from '@matthewp/zebra';
-
-class Greeting extends View {
-  name = undefined;
-
-  // Compact template, space seeds the text node for .data updates
-  template() {
-    return html`<div class="greeting">Hello <span class="name"> </span>!</div>`;
-  }
-
-  mount(el) {
-    super.mount(el);
-    // Cache the text node, not the element
-    this.nameText = el.querySelector('.name').firstChild;
-  }
-
-  setName(value) {
-    if (this.name !== value) {
-      this.name = value;
-      this.nameText.data = value;  // in-place, no node recreation
-    }
-  }
-
-  update(data = {}) {
-    if ('name' in data) this.setName(data.name);
-    return this.el;
-  }
-}
-
-export default Greeting;
-```
-
-## Example with Events (Counter)
-
-```javascript
-import { View, html } from '@matthewp/zebra';
+import { View, Div, Span, Button, signal, effect } from '@matthewp/zebra';
 
 class Counter extends View {
-  count = undefined;
-  min = 0;
+  count = signal(0);
 
-  template() {
-    return html`<div class="counter"><button class="decrement">-</button><span class="count"> </span><button class="increment">+</button></div>`;
+  render() {
+    const root = new Div().addClass('counter');
+    const span = new Span();
+    const inc = new Button()
+      .setText('+')
+      .on('click', () => this.count(this.count() + 1));
+
+    effect(() => {
+      span.setText(String(this.count()));
+    });
+
+    root.append(span, inc);
+    return root;
   }
-
-  mount(el) {
-    super.mount(el);
-    this.countText = el.querySelector('.count').firstChild;
-    this.incrementNode = el.querySelector('.increment');
-    this.decrementNode = el.querySelector('.decrement');
-
-    this.incrementNode.addEventListener('click', () => this.onIncrementClick());
-    this.decrementNode.addEventListener('click', () => this.onDecrementClick());
-
-    this.setCount(0);
-  }
-
-  setCount(value) {
-    if (this.count !== value) {
-      this.count = value;
-      this.countText.data = value;
-    }
-  }
-
-  onIncrementClick() {
-    this.setCount(this.count + 1);
-  }
-
-  onDecrementClick() {
-    if (this.count - 1 >= this.min) {
-      this.setCount(this.count - 1);
-    }
-  }
-
-  update(data = {}) {
-    if ('count' in data) this.setCount(data.count);
-    return this.el;
-  }
-}
-
-export default Counter;
-```
-
-## Dispatching Events
-
-Use `CustomEvent` to communicate from child views to parents. Dispatch from the view's root element with `bubbles: true` so events propagate up through the DOM tree:
-
-```javascript
-dispatchChange() {
-  this.el.dispatchEvent(new CustomEvent('change', {
-    detail: { count: this.count },
-    bubbles: true
-  }));
 }
 ```
 
-A parent listens in its `mount()`:
+Three building blocks:
+
+1. **State fields** declared as `signal(...)`, `computed(...)`, or plain values.
+2. **`render()`** builds the element tree, wires events with `.on()`, wires reactivity with `effect()`, and returns the root `Element`.
+3. **Event handlers** are regular methods (or inline arrows) that update signals.
+
+## The Class Hierarchy
+
+```
+Node (abstract)
+├── Element        — wraps one HTML tag, holds attrs/classes/styles/children
+│   ├── Div, Span, Button, Input, ...  (tag subclasses)
+│   └── View       — component with render()
+│       └── List   — keyed reconciliation
+├── Fragment       — multiple siblings, no wrapper tag
+└── RawHTML        — escape hatch for pre-rendered HTML strings
+```
+
+`Node` provides the shared API (`append`, `addClass`, `setStyle`, ...). Methods on `Element` operate on its own state and DOM. Methods on `Fragment` broadcast to its element children.
+
+## Element
+
+`Element` is the building block for DOM. Use the tag subclasses (`Div`, `Span`, `Button`, `Input`, ...) — never `new Element('div')` directly when a subclass exists. The full list is in the **Method reference** at the bottom.
 
 ```javascript
-mount(el) {
-  super.mount(el);
-  el.addEventListener('change', (e) => this.onCounterChange(e));
-}
+const link = new Anchor()
+  .setAttribute('href', '/about')
+  .addClass('nav-link')
+  .setText('About');
+```
 
-onCounterChange(e) {
-  this.setTotal(e.detail.count);
+All mutation methods return `this` for chaining.
+
+### Lazy DOM
+
+`Element` does **not** create a DOM node when constructed — only when `toDOM()` or `mount()` is called. This is what makes the same code work for SSR (`toString()` never touches a DOM) and the client.
+
+After mount, `el` holds the real `HTMLElement`. Methods that mutate state (e.g. `addClass`) update both the internal state *and* the live DOM if mounted.
+
+```javascript
+const div = new Div().addClass('foo');  // no DOM yet
+div.toString();                          // '<div class="foo"></div>'
+div.mount(document.body);                // creates DOM, appends to body
+div.addClass('bar');                     // updates state AND div.el.classList
+```
+
+### Composing children
+
+Elements compose by `.append()` — accepts other `Node`s and strings:
+
+```javascript
+const card = new Div().addClass('card').append(
+  new H2().setText('Title'),
+  new P().setText('Body text'),
+  new Anchor().setAttribute('href', '/more').setText('Read more'),
+);
+```
+
+Strings are HTML-escaped automatically in `toString()`. To insert pre-rendered HTML, use `setHTML()` or append a `RawHTML` node — both are explicit escape hatches.
+
+## View
+
+A `View` is a class with a `render()` method that returns an `Element`. It extends `Element`, so you can `append(view)` it anywhere.
+
+```javascript
+class UserCard extends View {
+  user = signal({ name: '', bio: '' });
+
+  render() {
+    const root = new Div().addClass('user-card');
+    const name = new H3();
+    const bio = new P();
+
+    effect(() => {
+      const u = this.user();
+      name.setText(u.name);
+      bio.setText(u.bio);
+    });
+
+    root.append(name, bio);
+    return root;
+  }
 }
 ```
 
-Because events bubble, a parent can listen for events from deeply nested children without importing or referencing them directly:
+`render()` is called **once**, lazily, and the result is cached. Effects set up inside `render()` live for the lifetime of the view. **Don't write logic that expects `render()` to be re-called** — that's what effects are for.
+
+### Mounting
 
 ```javascript
-// A grandchild dispatches:
-this.el.dispatchEvent(new CustomEvent('item-delete', {
-  detail: { id: this.id },
-  bubbles: true
-}));
+// Client
+const card = new UserCard();
+card.mount(document.querySelector('#app'));
 
-// The top-level app listens, even though it doesn't reference the grandchild:
-mount(el) {
-  super.mount(el);
-  el.addEventListener('item-delete', (e) => this.onItemDelete(e));
+// SSR
+const card = new UserCard();
+const html = card.toString();
+```
+
+### Composing views
+
+Views are nodes — append them like any other element:
+
+```javascript
+class App extends View {
+  header = new Header();
+  list = new TodoList();
+
+  render() {
+    return new Div().addClass('app').append(this.header, this.list);
+  }
 }
 ```
 
-## Data Loading
+Declare child views as **fields**, not inside `render()`, so they survive `render()` running once.
 
-Zebra uses a `DataEvent` — a subclass of `Event` — to let views declare their data needs without coupling to a specific data layer. Events bubble up through the DOM; any ancestor can respond.
+## Signals & Effects
 
-### DataEvent
+State is held in **signals**. A signal is a function: call with no args to read, with one arg to write.
 
 ```javascript
-class DataEvent extends Event {
-  constructor(type, request) {
-    super(type, { bubbles: true });
-    this.request = request;
-    this.promise = null;
-  }
+import { signal, computed, effect } from '@matthewp/zebra';
 
-  respondWith(promise) {
-    this.promise = promise;
-  }
+const count = signal(0);
+count();        // 0
+count(5);       // sets to 5
+count();        // 5
 
-  handled() {
-    if (!this.promise) throw new Error(`DataEvent "${this.type}" was not handled by any ancestor`);
-    return this.promise;
+const doubled = computed(() => count() * 2);
+doubled();      // 10
+
+effect(() => {
+  console.log('count is', count());
+});
+count(7);       // logs "count is 7"
+```
+
+### When to use which
+
+- **`signal(v)`** — mutable state owned by a view.
+- **`computed(() => ...)`** — derived value from one or more signals. Cached; only recomputes when dependencies change.
+- **`effect(() => ...)`** — side effect (DOM update, log, fetch). Re-runs whenever a signal it read changes.
+
+### Effects for DOM updates
+
+Inside `render()`, use `effect()` to bind reactive state to the DOM:
+
+```javascript
+effect(() => {
+  span.setText(String(this.count()));
+});
+
+effect(() => {
+  button.toggleClass('active', this.isActive());
+});
+
+effect(() => {
+  link.setAttribute('href', this.url());
+});
+
+effect(() => {
+  this.isVisible() ? content.show() : content.hide();
+});
+```
+
+Multiple operations in one effect is fine — they all run together when any read signal changes:
+
+```javascript
+effect(() => {
+  const t = this.todo();
+  text.setText(t.text);
+  checkbox.setChecked(t.done);
+  root.toggleClass('completed', t.done);
+});
+```
+
+Effects run **immediately** the first time they're set up (during `render()`), so initial state lands without any extra plumbing.
+
+## Events
+
+### Listening
+
+Use `.on(event, handler)`:
+
+```javascript
+button.on('click', () => this.onIncrement());
+form.on('submit', (e) => {
+  e.preventDefault();
+  this.submit();
+});
+```
+
+For events from descendants, listen on the parent — events bubble:
+
+```javascript
+class TodoList extends View {
+  render() {
+    const root = new Ul().addClass('todo-list');
+    root.on('todo-toggle', (e) => this.handleToggle(e));
+    root.on('delete', (e) => this.handleDelete(e));
+    return root;
   }
 }
 ```
 
 ### Dispatching
 
-Dispatch a `DataEvent` in `mount()`, then chain off `handled()`. Set a loading state before dispatching and clear it when data arrives:
+Use `.emit(name, detail?, options?)` instead of constructing `CustomEvent` manually. Bubbling is on by default:
 
 ```javascript
-mount(el) {
-  super.mount(el);
-  this.nameText = el.querySelector('.name').firstChild;
-
-  this.setLoading(true);
-  const e = new DataEvent('data:user', { id: this.userId });
-  el.dispatchEvent(e);
-  e.handled().then(data => {
-    this.setLoading(false);
-    this.update(data);
-  });
+class TodoItem extends View {
+  onToggle() {
+    this.emit('todo-toggle', { id: this.todo().id });
+  }
 }
 ```
 
-### Responding
+## Forms
 
-Any ancestor responds in its `mount()` by listening for the event and calling `respondWith()`. Call `e.stopPropagation()` so only one ancestor handles it:
-
-```javascript
-mount(el) {
-  super.mount(el);
-  el.addEventListener('data:user', e => {
-    e.respondWith(fetchUser(e.request.id));
-    e.stopPropagation();
-  });
-}
-```
-
-### Eager child mounting
-
-To avoid sequential fetching, mount children immediately in `mount()` — before the parent has data. Children dispatch their own `DataEvent`s right away, so their fetches run in parallel with the parent's:
+Form elements have typed value methods — never reach for `.el.value` directly.
 
 ```javascript
-mount(el) {
-  super.mount(el);
-  // Mount children eagerly — their DataEvents fire immediately, in parallel
-  this.header.mount(el.querySelector('.header'));
-  this.sidebar.mount(el.querySelector('.sidebar'));
+const input = new Input().setAttribute('type', 'text');
 
-  const e = new DataEvent('data:page', { id: this.pageId });
-  el.dispatchEvent(e);
-  e.handled().then(data => this.update(data));
-}
+input.on('input', () => this.query(input.getValue()));
+
+effect(() => {
+  if (!input.isFocused()) input.setValue(this.query());
+});
 ```
 
-This works when children are structurally known ahead of time. If a child's identity depends on parent data (e.g. a list of items fetched from the server), fetching is necessarily sequential — dispatch the child's `DataEvent` after the parent's resolves.
-
-### SSR
-
-`DataEvent` is client-only — there is no DOM to bubble through on the server. For SSR, pass data directly as props to `renderToString()` and `template()`.
+Methods:
+- `Input` / `Textarea` / `Select` — `setValue(s)` / `getValue()`
+- `Input` (checkboxes) — `setChecked(bool)` / `isChecked()`
+- All — `isFocused()`, `focus()`, `blur()`
 
 ## Lists
 
-For dynamic lists of child views, use the `List` class from `@matthewp/zebra/list`. It handles creating, updating, reordering, and removing child views efficiently using a keyed reconciliation algorithm that minimizes DOM operations.
+Use `List` from `@matthewp/zebra/list` for dynamic, keyed children. It does keyed reconciliation — items with the same key are updated in place rather than recreated.
 
 ```javascript
 import { List } from '@matthewp/zebra/list';
+
+this.list = new List(
+  () => this.items(),                  // items source: signal getter or array
+  item => item.id,                      // key function
+  item => new ItemView(item),           // factory: creates a view for an item
+  'ul',                                 // optional: container tag (default 'div')
+).addClass('item-list');
 ```
 
-### API
+When the items signal changes, `List` reconciles the DOM:
+- Items with new keys are created via the factory
+- Items with existing keys are updated in place via `view.update(item)`
+- Removed items are detached
+- Reordering uses minimal DOM moves
+
+The factory creates a view per item. Implement `update(item)` on the item view (typically by writing to a signal) so reconciliation can refresh existing instances:
 
 ```javascript
-let list = new List(ItemView, item => item.id);
-```
+class TodoItem extends View {
+  todo;
 
-- **First argument**: the View subclass to instantiate for each item
-- **Second argument**: a key function that returns a unique identifier for each item
-
-Embed the list in a parent template by interpolation, and mount it in `mount()`:
-
-```javascript
-import { View, slot, html } from '@matthewp/zebra';
-import { List } from '@matthewp/zebra/list';
-import TodoItem from './todo-item.js';
-
-class TodoList extends View {
-  constructor() {
+  constructor(initial) {
     super();
-    this.list = new List(TodoItem, todo => todo.id);
+    this.todo = signal(initial);
   }
 
-  template(props) {
-    return html`<ul class="todo-list">${this.list.template(props?.todos)}</ul>`;
+  render() {
+    const root = new Li().addClass('todo-item');
+    const text = new Span();
+
+    effect(() => {
+      text.setText(this.todo().text);
+      root.toggleClass('completed', this.todo().done);
+    });
+
+    root.append(text);
+    return root;
   }
 
-  mount(el, todos) {
-    super.mount(el);
-    this.list.mount(el, todos);
-  }
-
-  setTodos(todos) {
-    this.list.update(todos);
-  }
-
-  update(data = {}) {
-    if ('todos' in data) this.setTodos(data.todos);
-    return this.el;
+  update(todo) {
+    this.todo(todo);
   }
 }
 ```
 
-- **`list.template(items)`** — renders all items as HTML strings (for SSR)
-- **`list.mount(container, items?)`** — adopts existing child elements in the container, hydrating a view for each one
-- **`list.update(items)`** — reconciles the list: creates new views, updates existing ones, removes stale ones, reorders with minimal DOM moves
-
-Each item in the array is passed to the child view's `update()` method. The key function determines identity — items with the same key are updated in place rather than recreated.
-
-**Pass object references, not copies.** `List.update()` uses referential equality (`===`) to skip `update()` calls on unchanged items. Only create new object references for items that actually changed:
+**Pass new object references for changed items, keep references for unchanged ones.** `List` uses `===` to skip `update()` calls on unchanged items:
 
 ```javascript
-// Good — unchanged items keep the same reference; List skips their update()
-rows[i] = { ...rows[i], label: rows[i].label + ' !!!' };
+// Good — only the toggled item gets a new reference
+this.todos(this.todos().map(t =>
+  t.id === id ? { ...t, done: !t.done } : t
+));
 
 // Bad — every item gets a new reference; List calls update() on all of them
-rows = rows.map(row => ({ ...row }));
+this.todos(this.todos().map(t => ({ ...t })));
 ```
+
+## Fragment
+
+Use `Fragment` to group multiple siblings without a wrapping tag. Common when:
+- A `<tr>` or grid layout where an extra wrapper would break CSS
+- A logical group of nodes you want to apply a class to as a unit (Fragment broadcasts methods to its element children)
+
+```javascript
+import { Fragment } from '@matthewp/zebra';
+
+const cells = new Fragment().append(
+  new Td().setText('A'),
+  new Td().setText('B'),
+  new Td().setText('C'),
+);
+cells.addClass('cell');  // applies to each Td
+row.append(cells);
+```
+
+`Fragment` does not have its own DOM after mount — its children are adopted by the parent. It's a build-time grouping.
+
+## Server-side rendering
+
+Same code, no DOM needed:
+
+```javascript
+import { App } from './app.ts';
+
+const html = new App().toString();
+// '<div class="app">...</div>'
+```
+
+`toString()` walks the element tree without ever calling `document.createElement`. It's safe to call on Node.js with no DOM shim.
+
+Hydration (client-side mount onto SSR'd HTML) is not currently provided — `mount()` builds fresh DOM and appends. For now, SSR is best for static HTML output or HTML responses where the client re-renders.
 
 ## Critical Rules
 
-### Exclusive Mutation
+### Never reach for `this.el` from a view
 
-- DOM nodes should only be modified through their corresponding setter method
-- State should only be modified through setter methods
-- This makes it easy to debug — set a breakpoint in a setter to see every call site
-- **Never manipulate a child view's DOM directly** — all communication with child views must go through their `update()` method. Don't touch `view.el.classList`, `view.someNode`, etc. from the parent. If the child needs new behavior, add a setter and wire it through `update()`.
+The framework provides typed methods for every common DOM operation. Use them instead of `this.el.foo`:
 
-### Props Down, Events Up
+| Want to... | Use |
+|---|---|
+| Read input value | `input.getValue()` |
+| Write input value | `input.setValue(v)` |
+| Read checkbox state | `input.isChecked()` |
+| Write checkbox state | `input.setChecked(b)` |
+| Check focus | `el.isFocused()` |
+| Focus / blur | `el.focus()` / `el.blur()` |
+| Read layout (offsetLeft, etc.) | `el.measure(e => e.offsetLeft)` |
+| Dispatch event | `el.emit('name', detail)` |
+| Set innerHTML | `el.setHTML(html)` |
+| Empty children | `el.clear()` |
+| Detach from DOM | `el.remove()` |
 
-- Data flows downward through `update(data)` calls
-- Child events bubble up through `CustomEvent`
-- Never reach up into parent state
+The only legitimate raw-DOM access is reading layout values, and `measure(fn)` covers that.
 
-### Conditional Updates
+### State lives in signals
 
-Always guard setters with an equality check:
+Don't write `this.count = newValue` and update the DOM by hand. Put state in signals, let an effect update the DOM. Setters with equality guards are unnecessary — signals don't notify when value is unchanged.
+
+### Declare child views as fields
+
+So they survive `render()` being called once and cached:
 
 ```javascript
-setName(value) {
-  if (this.name !== value) {
-    this.name = value;
-    this.nameText.data = value;
+class App extends View {
+  header = new Header();          // ✓
+  todoList = new TodoList();      // ✓
+
+  render() {
+    // const header = new Header(); ← ✗ would be re-created if render ran again
+    return new Div().append(this.header, this.todoList);
   }
 }
 ```
 
-### Event Listeners
+### Build structure once, react inside effects
 
-Use inline arrow functions in `addEventListener` calls within `mount()`, and define event handler methods as regular methods:
+`render()` runs once. Build the tree, then wrap reactive bits in `effect()`:
 
 ```javascript
-mount(el) {
-  super.mount(el);
-  this.incrementNode = el.querySelector('.increment');
-  this.incrementNode.addEventListener('click', () => this.onIncrementClick());
-}
+render() {
+  const root = new Div();
+  const text = new Span();
 
-onIncrementClick() {
-  this.setCount(this.count + 1);
-}
-```
+  // Static structure
+  root.append(text);
 
-### DOM Manipulation
+  // Reactive bits
+  effect(() => text.setText(String(this.count())));
 
-Use modern DOM methods — `append`, `prepend`, `replaceWith`, `remove`, `before`, `after` — instead of legacy APIs like `appendChild`, `insertBefore`, `removeChild`, `replaceChild`.
-
-### Exports
-
-Use `export default` for view classes — one view per file.
-
-## TypeScript
-
-When the project uses TypeScript, add types for the public interface and DOM queries. Let inference handle the rest.
-
-### What to type explicitly
-
-**DOM node properties** — declare as `Text` for text nodes, element types for everything else:
-
-```typescript
-nameText!: Text;
-incrementNode!: HTMLButtonElement;
-```
-
-**mount parameter:**
-
-```typescript
-mount(el: HTMLElement) {
-  super.mount(el);
-  this.nameText = el.querySelector('.name')!.firstChild as Text;
-  this.incrementNode = el.querySelector('.increment') as HTMLButtonElement;
+  return root;
 }
 ```
 
-**update data parameter:**
+### Props down via `update()`, events up via `emit()`
 
-```typescript
-update(data: { count?: number } = {}) {
-  if ('count' in data) this.setCount(data.count!);
-  return this.el;
-}
-```
+Children expose `update(data)` for parents to push state down (used by `List`). Children dispatch events with `emit()` for parents to react. Don't reach into a child's signals or fields from a parent.
 
-### What to let TypeScript infer
+## Method reference
 
-- Setter parameter types (inferred from usage)
-- Return types on methods
-- State field types (when initialized)
+### `Node` (base — Element & Fragment both inherit)
 
-## Performance Notes
+| Method | Description |
+|---|---|
+| `append(...children)` | Append nodes/strings |
+| `prepend(...children)` | Prepend nodes/strings |
+| `setText(s)` | Replace children with text |
+| `setAttribute(name, val)` | Set attribute |
+| `removeAttribute(name)` | Remove attribute |
+| `toggleAttribute(name, force?)` | Toggle attribute (boolean attrs) |
+| `addClass(...)` / `removeClass(...)` | Class manipulation |
+| `toggleClass(name, force?)` | Toggle class |
+| `setStyle(prop, val)` / `removeStyle(prop)` | Inline style |
+| `show()` / `hide()` | Toggle `display` |
+| `on(event, handler)` | Add event listener |
+| `clear()` | Remove all children |
+| `disable()` / `enable()` | Toggle `disabled` attr |
+| `mount(container)` | Build DOM and append to container |
+| `toDOM()` / `toString()` | Build DOM / serialize to HTML string |
 
-Zebra's template mechanism parses `template()` HTML once per class and `cloneNode`s the result for every instance — so creation cost scales only with clone size, not with parsing. The patterns shown throughout this document keep that cost minimal:
+On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to element children.
 
-- **Compact templates** (no whitespace between elements) avoid extra text nodes in every clone. For 1000 list rows, even 4 extra text nodes per row is 4000 extra DOM nodes affecting layout and paint.
-- **Space placeholders + `.data`** avoid the DOM churn of `textContent` (which removes all children and creates a new text node on every call). `.data` on a pre-existing text node mutates it in place.
+### `Element` (additional, beyond Node)
 
-**Direct DOM traversal** (`firstChild`/`nextSibling` instead of `querySelector`) removes measurable overhead from `mount()` in views that are created thousands of times in tight loops. Use it only when profiling confirms a bottleneck — `querySelector` is preferred for readability everywhere else.
+| Method | Description |
+|---|---|
+| `el` | The `HTMLElement` after mount, else `null` |
+| `emit(name, detail?, options?)` | Dispatch a `CustomEvent` (bubbles by default) |
+| `focus()` / `blur()` | Native focus control |
+| `isFocused()` | Whether `document.activeElement === el` |
+| `measure(fn)` | Read layout values: `el.measure(e => e.offsetLeft)` |
+| `setHTML(html)` | Set innerHTML (escape hatch) |
+| `remove()` | Detach from parent DOM |
 
-## When Creating Views
+### `Input` (additional)
 
-1. **Detect file extension**: Check for `tsconfig.json` or existing `.ts` files. Use `.ts` if found, otherwise `.js`
-2. Start with the template HTML — write it as a compact single-line string, no whitespace between elements
-3. For elements whose text content is dynamic, put a single space in them so a text node is seeded
-4. Create state field declarations for each piece of dynamic data
-5. If the view has children: write a constructor that creates them after `super()`
-6. Use `html` tagged template literal — child views embedded by interpolation, `slot()` for lists with data
-7. In `mount()`: call `super.mount(el)`, cache **text node** references (`.querySelector('.foo').firstChild`) for dynamic cells, mount child views, attach event listeners
-8. Write setter methods that guard with `!==` and update via `.data` on text nodes
-9. Wire up `update(data)` to call the setters
+| Method | Description |
+|---|---|
+| `setValue(s)` / `getValue()` | Text input value |
+| `setChecked(b)` / `isChecked()` | Checkbox state |
+
+### `Textarea`, `Select`
+
+| Method | Description |
+|---|---|
+| `setValue(s)` / `getValue()` | Value |
+
+### Tag subclasses available
+
+Container: `Div`, `Span`, `P`, `Section`, `Article`, `Header`, `Footer`, `Nav`, `Main`, `Aside`
+Headings: `H1`, `H2`, `H3`, `H4`, `H5`, `H6`
+Lists: `Ul`, `Ol`, `Li`
+Tables: `Table`, `Thead`, `Tbody`, `Tr`, `Td`, `Th`
+Forms: `Form`, `Input`, `Textarea`, `Label`, `Button`, `Select`, `Option`, `Output`
+Inline: `Anchor` (a), `Strong`, `Em`, `Small`, `Code`, `Pre`
+Media: `Img`
+Void: `Br`, `Hr`
+
+For tags not in this list, use `new Element('section')` style — but prefer the subclass when one exists.
+
+## When creating a new view
+
+1. **Detect file extension**: Check for `tsconfig.json` or existing `.ts` files. Use `.ts` if found, otherwise `.js`.
+2. Define class extending `View`.
+3. Declare state as `signal(...)`/`computed(...)` fields. Declare child views as fields too.
+4. Implement `render()`:
+   - Build the static tree with `new Div()`/`new Span()`/etc, chained calls.
+   - Append children. Wire events with `.on()`.
+   - Wrap reactive bits in `effect()`. One effect can touch multiple nodes.
+   - Return the root element.
+5. Add event handlers as methods. They typically just write to signals (state) — let effects propagate to the DOM.
+6. If the view will be used inside a `List`, implement `update(item)` to write the new item into a signal.
+7. **Do not** reach for `this.el` or any element's `.el` property. Use the typed methods.

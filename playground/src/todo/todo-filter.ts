@@ -1,53 +1,34 @@
-import { View } from '@matthewp/zebra';
+import { View, Div, Button, signal, effect, type Element } from '@matthewp/zebra';
 
 export type FilterMode = 'all' | 'active' | 'completed';
 
 export class TodoFilter extends View {
-  mode: FilterMode = 'all';
+  mode: ReturnType<typeof signal<FilterMode>>;
 
-  allNode!: HTMLButtonElement;
-  activeNode!: HTMLButtonElement;
-  completedNode!: HTMLButtonElement;
-
-  template() {
-    return `<div class="todo-filter">
-      <button class="filter-all active" type="button">All</button>
-      <button class="filter-active" type="button">Active</button>
-      <button class="filter-completed" type="button">Completed</button>
-    </div>`;
+  constructor(mode: ReturnType<typeof signal<FilterMode>>) {
+    super();
+    this.mode = mode;
   }
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.allNode = el.querySelector('.filter-all') as HTMLButtonElement;
-    this.activeNode = el.querySelector('.filter-active') as HTMLButtonElement;
-    this.completedNode = el.querySelector('.filter-completed') as HTMLButtonElement;
+  render(): Element {
+    const root = new Div().addClass('todo-filter');
+    const all = new Button().addClass('filter-all').setAttribute('type', 'button').setText('All');
+    const active = new Button().addClass('filter-active').setAttribute('type', 'button').setText('Active');
+    const completed = new Button().addClass('filter-completed').setAttribute('type', 'button').setText('Completed');
 
-    this.allNode.addEventListener('click', () => this.onFilterClick('all'));
-    this.activeNode.addEventListener('click', () => this.onFilterClick('active'));
-    this.completedNode.addEventListener('click', () => this.onFilterClick('completed'));
-  }
+    all.on('click', () => this.mode('all'));
+    active.on('click', () => this.mode('active'));
+    completed.on('click', () => this.mode('completed'));
 
-  setMode(value: FilterMode) {
-    if (this.mode !== value) {
-      this.mode = value;
-      this.allNode.classList.toggle('active', value === 'all');
-      this.activeNode.classList.toggle('active', value === 'active');
-      this.completedNode.classList.toggle('active', value === 'completed');
-    }
-  }
+    effect(() => {
+      const m = this.mode();
+      all.toggleClass('active', m === 'all');
+      active.toggleClass('active', m === 'active');
+      completed.toggleClass('active', m === 'completed');
+    });
 
-  onFilterClick(mode: FilterMode) {
-    this.setMode(mode);
-    this.el.dispatchEvent(new CustomEvent('filter-change', {
-      detail: { mode },
-      bubbles: true,
-    }));
-  }
-
-  update(data: { mode?: FilterMode } = {}) {
-    if ('mode' in data) this.setMode(data.mode!);
-    return this.el;
+    root.append(all, active, completed);
+    return root;
   }
 }
 

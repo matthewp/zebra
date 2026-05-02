@@ -1,61 +1,46 @@
-import { View } from '@matthewp/zebra';
+import { View, Div, Label, Input, Span, signal, effect, type Element } from '@matthewp/zebra';
 
 export class TempConverter extends View {
-  celsius: number | undefined = undefined;
-  fahrenheit: number | undefined = undefined;
+  celsius = signal<number | undefined>(undefined);
+  fahrenheit = signal<number | undefined>(undefined);
 
-  celsiusNode!: HTMLInputElement;
-  fahrenheitNode!: HTMLInputElement;
+  render(): Element {
+    const root = new Div().addClass('temp-converter');
 
-  template() {
-    return `<div class="temp-converter">
-      <label>Celsius <input class="celsius" type="number"></label>
-      <span class="arrow">=</span>
-      <label>Fahrenheit <input class="fahrenheit" type="number"></label>
-    </div>`;
-  }
+    const celsiusInput = new Input().addClass('celsius').setAttribute('type', 'number');
+    const celsiusLabel = new Label().append('Celsius ', celsiusInput);
+    const arrow = new Span().addClass('arrow').setText('=');
+    const fahrenheitInput = new Input().addClass('fahrenheit').setAttribute('type', 'number');
+    const fahrenheitLabel = new Label().append('Fahrenheit ', fahrenheitInput);
 
-  mount(el: HTMLElement) {
-    super.mount(el);
-    this.celsiusNode = el.querySelector('.celsius') as HTMLInputElement;
-    this.fahrenheitNode = el.querySelector('.fahrenheit') as HTMLInputElement;
+    celsiusInput.on('input', () => {
+      const c = Number(celsiusInput.getValue());
+      this.celsius(c);
+      this.fahrenheit(Math.round(c * 9 / 5 + 32));
+    });
 
-    this.celsiusNode.addEventListener('input', () => this.onCelsiusInput());
-    this.fahrenheitNode.addEventListener('input', () => this.onFahrenheitInput());
-  }
+    fahrenheitInput.on('input', () => {
+      const f = Number(fahrenheitInput.getValue());
+      this.fahrenheit(f);
+      this.celsius(Math.round((f - 32) * 5 / 9));
+    });
 
-  setCelsius(value: number) {
-    if (this.celsius !== value) {
-      this.celsius = value;
-      this.celsiusNode.value = String(value);
-      let f = Math.round(value * 9 / 5 + 32);
-      this.fahrenheit = f;
-      this.fahrenheitNode.value = String(f);
-    }
-  }
+    effect(() => {
+      const c = this.celsius();
+      if (c !== undefined && !celsiusInput.isFocused()) {
+        celsiusInput.setValue(String(c));
+      }
+    });
 
-  setFahrenheit(value: number) {
-    if (this.fahrenheit !== value) {
-      this.fahrenheit = value;
-      this.fahrenheitNode.value = String(value);
-      let c = Math.round((value - 32) * 5 / 9);
-      this.celsius = c;
-      this.celsiusNode.value = String(c);
-    }
-  }
+    effect(() => {
+      const f = this.fahrenheit();
+      if (f !== undefined && !fahrenheitInput.isFocused()) {
+        fahrenheitInput.setValue(String(f));
+      }
+    });
 
-  onCelsiusInput() {
-    this.setCelsius(Number(this.celsiusNode.value));
-  }
-
-  onFahrenheitInput() {
-    this.setFahrenheit(Number(this.fahrenheitNode.value));
-  }
-
-  update(data: { celsius?: number; fahrenheit?: number } = {}) {
-    if ('celsius' in data) this.setCelsius(data.celsius!);
-    if ('fahrenheit' in data) this.setFahrenheit(data.fahrenheit!);
-    return this.el;
+    root.append(celsiusLabel, arrow, fahrenheitLabel);
+    return root;
   }
 }
 

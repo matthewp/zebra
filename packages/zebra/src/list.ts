@@ -1,74 +1,100 @@
+import { Element } from './element.ts';
 import { View } from './view.ts';
-import { SafeHTML } from './html.ts';
+import { effect } from 'alien-signals';
 
-type ViewConstructor<T> = new () => View<T>;
+type ItemSource<T> = T[] | (() => T[]);
+type Factory<T> = (item: T) => View;
 
-export class List<T = Record<string, unknown>> {
-  private ViewClass: ViewConstructor<T>;
-  private keyFn: (item: T) => unknown;
-  private views: (View<T> | null)[] = [];
-  private keys: unknown[] = [];
-  private items: (T | null)[] = [];
-  private container: HTMLElement | null = null;
+export class List<T = unknown> extends View {
+  private _containerTag: string;
+  private _items: ItemSource<T>;
+  private _keyFn: (item: T) => unknown;
+  private _factory: Factory<T>;
+  private _views: (View | null)[] = [];
+  private _keys: unknown[] = [];
+  private _currentItems: (T | null)[] = [];
 
-  constructor(ViewClass: ViewConstructor<T>, keyFn: (item: T) => unknown) {
-    this.ViewClass = ViewClass;
-    this.keyFn = keyFn;
+  constructor(
+    items: ItemSource<T>,
+    keyFn: (item: T) => unknown,
+    factory: Factory<T>,
+    tag = 'div',
+  ) {
+    super();
+    this._containerTag = tag;
+    this._items = items;
+    this._keyFn = keyFn;
+    this._factory = factory;
   }
 
-  template(items?: T[]): SafeHTML {
-    if (!items || items.length === 0) return new SafeHTML('');
-    return new SafeHTML(items.map(item => {
-      let view = new this.ViewClass();
-      return view.template(item).toString();
-    }).join(''));
+  private _getItems(): T[] {
+    return typeof this._items === 'function'
+      ? (this._items as () => T[])()
+      : this._items;
   }
 
-  mount(container: HTMLElement, items?: T[]) {
-    this.container = container;
-    let children = Array.from(container.children) as HTMLElement[];
-    if (children.length > 0 && items) {
-      for (let i = 0; i < children.length && i < items.length; i++) {
-        let view = new this.ViewClass();
-        view.mount(children[i]);
-        view.update(items[i]);
-        this.views.push(view);
-        this.keys.push(this.keyFn(items[i]));
-        this.items.push(items[i]);
+  render(): Element {
+    const container = new Element(this._containerTag);
+
+    effect(() => {
+      const items = this._getItems();
+      if (container.el) {
+        this._reconcile(container.el, items);
+      } else {
+        this._buildInitial(container, items);
+      }
+    });
+
+    return container;
+  }
+
+  private _buildInitial(container: Element, items: T[]): void {
+    this._views = [];
+    this._keys = [];
+    this._currentItems = [];
+    for (const item of items) {
+      const view = this._factory(item);
+      this._views.push(view);
+      this._keys.push(this._keyFn(item));
+      this._currentItems.push(item);
+      container.append(view);
+    }
+  }
+
+  private _updateView(view: View, newItem: T, oldItem: T | null): void {
+    if (newItem !== oldItem) {
+      const anyView = view as any;
+      if (typeof anyView.update === 'function') {
+        anyView.update(newItem);
       }
     }
   }
 
-  private updateView(view: View<T>, newItem: T, oldItem: T | null) {
-    if (newItem !== oldItem) view.update(newItem);
-  }
+  private _reconcile(container: HTMLElement, items: T[]): void {
+    const oldViews = this._views;
+    const oldKeys = this._keys;
+    const oldItems = this._currentItems;
 
-  update(items: T[]) {
-    let container = this.container!;
-    let oldViews = this.views;
-    let oldKeys = this.keys;
-    let oldItems = this.items;
-
-    // Fast path: same length + all keys in same order → pure in-place update
+    // Fast path: same length + all keys in same order
     if (items.length === oldViews.length && items.length > 0) {
       let sameOrder = true;
-      let newKeys2 = new Array(items.length);
+      const newKeys2 = new Array(items.length);
       for (let i = 0; i < items.length; i++) {
-        newKeys2[i] = this.keyFn(items[i]);
+        newKeys2[i] = this._keyFn(items[i]);
         if (newKeys2[i] !== oldKeys[i]) { sameOrder = false; break; }
       }
       if (sameOrder) {
         for (let i = 0; i < items.length; i++) {
-          if (items[i] !== oldItems[i]) oldViews[i]!.update(items[i]);
-          this.items[i] = items[i];
+          if (items[i] !== oldItems[i]) this._updateView(oldViews[i]!, items[i], oldItems[i]);
+          this._currentItems[i] = items[i];
         }
         return;
       }
     }
 
-    let newKeys = items.map(this.keyFn);
-    let newViews: (View<T> | null)[] = new Array(items.length).fill(null);
-    let newItems: (T | null)[] = new Array(items.length).fill(null);
+    const newKeys = items.map(this._keyFn);
+    const newViews: (View | null)[] = new Array(items.length).fill(null);
+    const newItems: (T | null)[] = new Array(items.length).fill(null);
 
     let oldHead = 0;
     let oldTail = oldViews.length - 1;
@@ -83,37 +109,32 @@ export class List<T = Record<string, unknown>> {
       } else if (oldViews[oldTail] === null) {
         oldTail--;
       } else if (oldKeys[oldHead] === newKeys[newHead]) {
-        // Head-Head match
         newViews[newHead] = oldViews[oldHead];
         newItems[newHead] = items[newHead];
-        this.updateView(oldViews[oldHead]!, items[newHead], oldItems[oldHead]);
+        this._updateView(oldViews[oldHead]!, items[newHead], oldItems[oldHead]);
         oldHead++;
         newHead++;
       } else if (oldKeys[oldTail] === newKeys[newTail]) {
-        // Tail-Tail match
         newViews[newTail] = oldViews[oldTail];
         newItems[newTail] = items[newTail];
-        this.updateView(oldViews[oldTail]!, items[newTail], oldItems[oldTail]);
+        this._updateView(oldViews[oldTail]!, items[newTail], oldItems[oldTail]);
         oldTail--;
         newTail--;
       } else if (oldKeys[oldHead] === newKeys[newTail]) {
-        // Head-Tail match: move old head to after old tail
         newViews[newTail] = oldViews[oldHead];
         newItems[newTail] = items[newTail];
-        this.updateView(oldViews[oldHead]!, items[newTail], oldItems[oldHead]);
-        oldViews[oldTail]!.el.after(oldViews[oldHead]!.el);
+        this._updateView(oldViews[oldHead]!, items[newTail], oldItems[oldHead]);
+        oldViews[oldTail]!.toDOM().after(oldViews[oldHead]!.toDOM());
         oldHead++;
         newTail--;
       } else if (oldKeys[oldTail] === newKeys[newHead]) {
-        // Tail-Head match: move old tail to before old head
         newViews[newHead] = oldViews[oldTail];
         newItems[newHead] = items[newHead];
-        this.updateView(oldViews[oldTail]!, items[newHead], oldItems[oldTail]);
-        oldViews[oldHead]!.el.before(oldViews[oldTail]!.el);
+        this._updateView(oldViews[oldTail]!, items[newHead], oldItems[oldTail]);
+        oldViews[oldHead]!.toDOM().before(oldViews[oldTail]!.toDOM());
         oldTail--;
         newHead++;
       } else {
-        // Build map lazily
         if (!oldKeyToIndex) {
           oldKeyToIndex = new Map();
           for (let i = oldHead; i <= oldTail; i++) {
@@ -123,55 +144,46 @@ export class List<T = Record<string, unknown>> {
           }
         }
 
-        let oldIndex = oldKeyToIndex.get(newKeys[newHead]);
+        const oldIndex = oldKeyToIndex.get(newKeys[newHead]);
         if (oldIndex === undefined) {
-          // New item
-          let view = new this.ViewClass();
-          view.createAndMount();
+          const view = this._factory(items[newHead]);
           newViews[newHead] = view;
           newItems[newHead] = items[newHead];
-          oldViews[oldHead]!.el.before(view.el);
-          this.updateView(view, items[newHead], null);
+          oldViews[oldHead]!.toDOM().before(view.toDOM());
         } else {
-          // Move existing
-          let view = oldViews[oldIndex]!;
-          this.updateView(view, items[newHead], oldItems[oldIndex]);
+          const view = oldViews[oldIndex]!;
+          this._updateView(view, items[newHead], oldItems[oldIndex]);
           newViews[newHead] = view;
           newItems[newHead] = items[newHead];
-          oldViews[oldHead]!.el.before(view.el);
+          oldViews[oldHead]!.toDOM().before(view.toDOM());
           oldViews[oldIndex] = null;
         }
         newHead++;
       }
     }
 
-    // Remove remaining old items
     while (oldHead <= oldTail) {
       if (oldViews[oldHead] !== null) {
-        oldViews[oldHead]!.el.remove();
+        oldViews[oldHead]!.toDOM().remove();
       }
       oldHead++;
     }
 
-    // Add remaining new items
     while (newHead <= newTail) {
-      let view = new this.ViewClass();
-      view.createAndMount();
+      const view = this._factory(items[newHead]);
       newViews[newHead] = view;
       newItems[newHead] = items[newHead];
-      let el = view.el;
-      let ref = newViews[newTail + 1]?.el;
+      const ref = newViews[newTail + 1]?.toDOM();
       if (ref) {
-        ref.before(el);
+        ref.before(view.toDOM());
       } else {
-        container.append(el);
+        container.append(view.toDOM());
       }
-      this.updateView(view, items[newHead], null);
       newHead++;
     }
 
-    this.views = newViews;
-    this.keys = newKeys;
-    this.items = newItems;
+    this._views = newViews;
+    this._keys = newKeys;
+    this._currentItems = newItems;
   }
 }
