@@ -1,8 +1,10 @@
 import { Element, type Child } from './element.ts';
 import { getActiveSub, setActiveSub } from 'alien-signals';
+import { getActiveView, setActiveView, type GlobalTarget } from './globals.ts';
 
 export class View extends Element {
   protected _rendered: Element | null = null;
+  protected _globals?: GlobalTarget[];
 
   constructor() {
     super('');
@@ -12,14 +14,21 @@ export class View extends Element {
     return new Element('div');
   }
 
+  _registerGlobal(g: GlobalTarget): void {
+    (this._globals ??= []).push(g);
+  }
+
   protected _getRendered(): Element {
     if (!this._rendered) {
-      const prev = getActiveSub();
+      const prevSub = getActiveSub();
+      const prevView = getActiveView();
       setActiveSub(undefined);
+      setActiveView(this);
       try {
         this._rendered = this.render();
       } finally {
-        setActiveSub(prev);
+        setActiveSub(prevSub);
+        setActiveView(prevView);
       }
     }
     return this._rendered;
@@ -120,6 +129,9 @@ export class View extends Element {
     if (this.el) return this.el;
     const el = this._getRendered().toDOM();
     this.el = el;
+    if (this._globals) {
+      for (const g of this._globals) g._boot(el);
+    }
     return el;
   }
 
@@ -127,6 +139,9 @@ export class View extends Element {
     if (this.el) return this;
     this._getRendered().hydrate(el);
     this.el = el;
+    if (this._globals) {
+      for (const g of this._globals) g._boot(el);
+    }
     return this;
   }
 

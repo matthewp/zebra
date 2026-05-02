@@ -54,6 +54,8 @@ Node (abstract)
 
 `Node` provides the shared API (`append`, `addClass`, `setStyle`, ...). Methods on `Element` operate on its own state and DOM. Methods on `Fragment` broadcast to its element children.
 
+Sitting outside the `Node` tree are `Document` and `Window` — handles for attaching global event listeners with View-scoped lifetimes. They aren't part of the rendered DOM; see **Global events** below.
+
 ## Element
 
 `Element` is the building block for DOM. Use the tag subclasses (`Div`, `Span`, `Button`, `Input`, ...) — never `new Element('div')` directly when a subclass exists. The full list is in the **Method reference** at the bottom.
@@ -251,7 +253,31 @@ class TodoItem extends View {
 }
 ```
 
-## Forms
+## Global events
+
+For events that don't bubble to a single element — `keydown` on `document`, `resize` / `scroll` / `popstate` on `window` — use `Document` and `Window`. Construct them inside `render()` and call `.on()`:
+
+```javascript
+import { View, Div, Document, Window } from '@matthewp/zebra';
+
+class Modal extends View {
+  render() {
+    new Document().on('keydown', (e) => {
+      if (e.key === 'Escape') this.close();
+    });
+
+    new Window().on('resize', () => this.recompute());
+
+    return new Div().addClass('modal').append(/* ... */);
+  }
+}
+```
+
+What you don't have to do: track listeners, remove them on unmount, hold onto a reference. The handle scopes itself to the View it's created inside; when that View's element leaves the DOM, the listeners are removed automatically.
+
+Two rules:
+- **Construct inside `render()`** so the active-View context picks them up. A `new Document()` outside a render isn't scoped to anything and won't auto-clean.
+- **SSR-safe.** `Document` and `Window` don't touch the global `document` / `window` until the View is mounted, so `toString()` on the server is fine.
 
 Form elements have typed value methods — never reach for `.el.value` directly.
 

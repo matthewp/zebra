@@ -57,6 +57,7 @@ npm install @matthewp/zebra
 - **`List`** handles dynamic lists with keyed reconciliation; takes a signal of items, a key fn, and a factory.
 - **`Fragment`** groups multiple siblings without a wrapper tag.
 - **`Model`** is a base class for state owned outside views — gives you `loading` / `error` signals, an async `run()` helper, and `toJSON()`/`fromJSON()` for SSR round-trip.
+- **`Document` / `Window`** attach global event listeners (e.g. `keydown` on `document`, `resize` on `window`) scoped to the View that creates them — listeners are removed automatically when the View leaves the DOM.
 
 ## Skill
 
