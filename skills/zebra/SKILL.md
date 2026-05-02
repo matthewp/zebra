@@ -353,6 +353,98 @@ row.append(cells);
 
 `Fragment` does not have its own DOM after mount — its children are adopted by the parent. It's a build-time grouping.
 
+## Models
+
+State that's owned outside of any single view — async data, shared mutations, anything that should round-trip through SSR — belongs in a **Model**. A Model is a class that holds signals and exposes methods to mutate them. Views consume a model via constructor injection.
+
+Extend the `Model` base class for built-in `loading` / `error` signals, an async `run()` helper, and `toJSON()`/`fromJSON()` for SSR data round-trip.
+
+```javascript
+import { Model, signal } from '@matthewp/zebra';
+
+export class WeatherModel extends Model {
+  zip = signal('');
+  data = signal(null);
+
+  async load(zip) {
+    this.zip(zip);
+    await this.run(async () => {
+      const res = await fetch(`/weather/${zip}`);
+      if (!res.ok) throw new Error('Lookup failed');
+      this.data(await res.json());
+    });
+  }
+}
+```
+
+`run(asyncFn)` toggles `loading` true → runs the function → captures any thrown error into the `error` signal → toggles `loading` false in `finally`. Replaces the try/catch/finally dance every async method otherwise needs.
+
+### Consuming a model in a view
+
+```javascript
+class Weather extends View {
+  constructor(model = new WeatherModel()) {
+    super();
+    this.model = model;
+  }
+
+  render() {
+    const root = new Div();
+    const status = new P();
+    const display = new Div();
+
+    effect(() => {
+      if (this.model.loading()) status.setText('Loading…').show();
+      else if (this.model.error()) status.setText(this.model.error()).show();
+      else status.hide();
+    });
+
+    effect(() => {
+      const d = this.model.data();
+      if (d) display.setText(`${d.tempF}°F`).show();
+      else display.hide();
+    });
+
+    root.append(status, display);
+    return root;
+  }
+}
+```
+
+The view doesn't own the data — it observes it. Mutations happen on the model (e.g. `this.model.load(zip)` from an event handler).
+
+### Serialization (SSR round-trip)
+
+`Model.toJSON()` walks signal-valued fields (skipping `loading` and `error`) and returns their current values. `Model.fromJSON(json)` writes them back.
+
+```javascript
+// Server
+const model = new WeatherModel();
+await model.load('47150');
+const view = new Weather(model);
+const html = view.toString();
+const data = JSON.stringify(model.toJSON());
+res.send(`...
+  <div id="app">${html}</div>
+  <script id="model-data" type="application/json">${data}</script>
+`);
+
+// Client
+const data = JSON.parse(document.getElementById('model-data').textContent);
+const model = new WeatherModel().fromJSON(data);
+const view = new Weather(model);
+view.hydrate(document.querySelector('#app').firstElementChild);
+```
+
+The client constructs the same model state the server had, so `render()` produces an identical tree → hydration matches the SSR'd HTML.
+
+### When not to use Model
+
+Don't use `Model` for purely view-local state. A counter's count, a tab's active index, a form's draft input value — those live as `signal()` fields directly on the view. Reach for `Model` when:
+- The state is async (loading / error matters)
+- Multiple views read it
+- It needs to round-trip through SSR
+
 ## Server-side rendering & hydration
 
 Same code, no DOM needed on the server:

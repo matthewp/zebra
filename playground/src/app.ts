@@ -4,6 +4,7 @@ import { FullName } from './full-name.ts';
 import { TempConverter } from './temp-converter.ts';
 import { SearchFilter } from './search-filter.ts';
 import { TodoApp } from './todo/todo-app.ts';
+import { Weather } from './weather/weather.ts';
 import { Tabs } from './tabs.ts';
 
 export class App extends View {
@@ -13,6 +14,7 @@ export class App extends View {
     { label: 'Full Name', view: new FullName() },
     { label: 'Temp Converter', view: new TempConverter() },
     { label: 'Search Filter', view: new SearchFilter() },
+    { label: 'Weather', view: new Weather() },
   ]);
 
   render(): Element {

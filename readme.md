@@ -56,6 +56,7 @@ npm install @matthewp/zebra
 - **`effect(fn)`** re-runs `fn` whenever any signal it read changes — used to update the DOM from state.
 - **`List`** (`@matthewp/zebra/list`) handles dynamic lists with keyed reconciliation; takes a signal of items, a key fn, and a factory.
 - **`Fragment`** groups multiple siblings without a wrapper tag.
+- **`Model`** is a base class for state owned outside views — gives you `loading` / `error` signals, an async `run()` helper, and `toJSON()`/`fromJSON()` for SSR round-trip.
 
 ## Skill
 

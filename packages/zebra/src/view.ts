@@ -1,4 +1,5 @@
 import { Element, type Child } from './element.ts';
+import { getActiveSub, setActiveSub } from 'alien-signals';
 
 export class View extends Element {
   protected _rendered: Element | null = null;
@@ -13,7 +14,13 @@ export class View extends Element {
 
   protected _getRendered(): Element {
     if (!this._rendered) {
-      this._rendered = this.render();
+      const prev = getActiveSub();
+      setActiveSub(undefined);
+      try {
+        this._rendered = this.render();
+      } finally {
+        setActiveSub(prev);
+      }
     }
     return this._rendered;
   }
