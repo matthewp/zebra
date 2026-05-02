@@ -19,6 +19,17 @@ const VOID_TAGS = new Set([
   'link', 'meta', 'param', 'source', 'track', 'wbr',
 ]);
 
+function splitClasses(classes: string[]): string[] {
+  const tokens: string[] = [];
+  for (const c of classes) {
+    if (!c) continue;
+    for (const t of c.split(/\s+/)) {
+      if (t) tokens.push(t);
+    }
+  }
+  return tokens;
+}
+
 export type Child = Node | string;
 
 export abstract class Node {
@@ -200,14 +211,16 @@ export class Element extends Node {
   }
 
   addClass(...classes: string[]): this {
-    for (const c of classes) this._classes.add(c);
-    if (this.el) this.el.classList.add(...classes);
+    const tokens = splitClasses(classes);
+    for (const c of tokens) this._classes.add(c);
+    if (this.el && tokens.length) this.el.classList.add(...tokens);
     return this;
   }
 
   removeClass(...classes: string[]): this {
-    for (const c of classes) this._classes.delete(c);
-    if (this.el) this.el.classList.remove(...classes);
+    const tokens = splitClasses(classes);
+    for (const c of tokens) this._classes.delete(c);
+    if (this.el && tokens.length) this.el.classList.remove(...tokens);
     return this;
   }
 

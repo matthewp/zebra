@@ -272,10 +272,10 @@ Methods:
 
 ## Lists
 
-Use `List` from `@matthewp/zebra/list` for dynamic, keyed children. It does keyed reconciliation — items with the same key are updated in place rather than recreated.
+Use `List` for dynamic, keyed children. It does keyed reconciliation — items with the same key are updated in place rather than recreated.
 
 ```javascript
-import { List } from '@matthewp/zebra/list';
+import { List } from '@matthewp/zebra';
 
 this.list = new List(
   () => this.items(),                  // items source: signal getter or array
@@ -564,7 +564,7 @@ Children expose `update(data)` for parents to push state down (used by `List`). 
 | `setAttribute(name, val)` | Set attribute |
 | `removeAttribute(name)` | Remove attribute |
 | `toggleAttribute(name, force?)` | Toggle attribute (boolean attrs) |
-| `addClass(...)` / `removeClass(...)` | Class manipulation |
+| `addClass(...)` / `removeClass(...)` | Class manipulation; each arg may be a single class or a space-separated list (`addClass('flex items-center px-4')`) |
 | `toggleClass(name, force?)` | Toggle class |
 | `setStyle(prop, val)` / `removeStyle(prop)` | Inline style |
 | `show()` / `hide()` | Toggle `display` |
