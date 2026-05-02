@@ -6,10 +6,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./list": {
-      "types": "./dist/list.d.ts",
-      "default": "./dist/list.js"
     }
   },
   "files": [

@@ -1,5 +1,4 @@
-import { View, Div, H2, signal, computed, type Element } from '@matthewp/zebra';
-import { List } from '@matthewp/zebra/list';
+import { View, Div, H2, List, signal, computed, type Element } from '@matthewp/zebra';
 import { TodoInput } from './todo-input.ts';
 import { TodoFilter, type FilterMode } from './todo-filter.ts';
 import { TodoItem, type Todo } from './todo-item.ts';

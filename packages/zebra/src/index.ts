@@ -49,6 +49,7 @@ export {
 export type { Child } from './element.ts';
 export { View } from './view.ts';
 export { Model } from './model.ts';
+export { List } from './list.ts';
 export {
   computed,
   effect,
