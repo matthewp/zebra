@@ -6,6 +6,7 @@ import { SearchFilter } from './search-filter.ts';
 import { TodoApp } from './todo/todo-app.ts';
 import { Weather } from './weather/weather.ts';
 import { Clock } from './clock/clock.ts';
+import { KanbanBoard } from './kanban/kanban.ts';
 import { Tabs } from './tabs.ts';
 
 export class App extends View {
@@ -17,6 +18,7 @@ export class App extends View {
     { label: 'Search Filter', view: new SearchFilter() },
     { label: 'Weather', view: new Weather() },
     { label: 'Clock', view: new Clock() },
+    { label: 'Kanban', view: new KanbanBoard() },
   ]);
 
   render(): Element {
