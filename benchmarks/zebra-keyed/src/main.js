@@ -1,4 +1,4 @@
-import { List } from '@matthewp/zebra';
+import { signal, List } from '@matthewp/zebra';
 import { RowView } from './row.js';
 
 const adjectives = ['pretty','large','big','small','tall','short','long','handsome','plain','quaint','clean','elegant','easy','angry','crazy','helpful','mushy','odd','unsightly','adorable','important','inexpensive','cheap','expensive','fancy'];
@@ -6,74 +6,59 @@ const colours = ['red','yellow','blue','green','pink','brown','purple','brown','
 const nouns = ['table','chair','house','bbq','desk','car','pony','cookie','sandwich','burger','pizza','mouse','keyboard'];
 
 let nextId = 1;
-
-function random(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+const random = arr => arr[Math.floor(Math.random() * arr.length)];
 
 function buildData(count) {
-  let data = new Array(count);
+  const data = new Array(count);
   for (let i = 0; i < count; i++) {
-    data[i] = { id: nextId++, label: `${random(adjectives)} ${random(colours)} ${random(nouns)}`, selected: false };
+    data[i] = {
+      id: nextId++,
+      label: `${random(adjectives)} ${random(colours)} ${random(nouns)}`,
+      selected: false,
+    };
   }
   return data;
 }
 
-let rows = [];
+const rows = signal([]);
 
-const tbody = document.getElementById('tbody');
-const list = new List(RowView, row => row.id);
-list.mount(tbody);
+const list = new List(rows, row => row.id, row => new RowView(row), 'tbody')
+  .on('row-select', (e) => {
+    const id = e.detail.id;
+    rows(rows().map(row =>
+      row.selected === (row.id === id) ? row : { ...row, selected: row.id === id }
+    ));
+  })
+  .on('row-remove', (e) => {
+    const id = e.detail.id;
+    rows(rows().filter(row => row.id !== id));
+  });
 
-function render() {
-  list.update(rows);
-}
+const placeholder = document.getElementById('tbody');
+const tbody = list.toDOM();
+tbody.id = 'tbody';
+placeholder.replaceWith(tbody);
 
-document.getElementById('run').addEventListener('click', () => {
-  rows = buildData(1000);
-  render();
-});
-
-document.getElementById('runlots').addEventListener('click', () => {
-  rows = buildData(10000);
-  render();
-});
-
-document.getElementById('add').addEventListener('click', () => {
-  rows = rows.concat(buildData(1000));
-  render();
-});
+document.getElementById('run').addEventListener('click', () => rows(buildData(1000)));
+document.getElementById('runlots').addEventListener('click', () => rows(buildData(10000)));
+document.getElementById('add').addEventListener('click', () => rows(rows().concat(buildData(1000))));
 
 document.getElementById('update').addEventListener('click', () => {
-  for (let i = 0; i < rows.length; i += 10) {
-    rows[i] = { ...rows[i], label: rows[i].label + ' !!!' };
+  const next = rows().slice();
+  for (let i = 0; i < next.length; i += 10) {
+    next[i] = { ...next[i], label: next[i].label + ' !!!' };
   }
-  render();
+  rows(next);
 });
 
-document.getElementById('clear').addEventListener('click', () => {
-  rows = [];
-  render();
-});
+document.getElementById('clear').addEventListener('click', () => rows([]));
 
 document.getElementById('swaprows').addEventListener('click', () => {
-  if (rows.length > 998) {
-    let tmp = rows[1];
-    rows[1] = rows[998];
-    rows[998] = tmp;
-    render();
-  }
-});
-
-tbody.addEventListener('click', e => {
-  let target = e.target;
-  if (target.matches('.lbl')) {
-    let id = parseInt(target.closest('tr').firstElementChild.textContent);
-    rows = rows.map(row => row.selected === (row.id === id) ? row : { ...row, selected: row.id === id });
-    render();
-  } else if (target.matches('.remove, .remove span')) {
-    let id = parseInt(target.closest('tr').firstElementChild.textContent);
-    rows = rows.filter(row => row.id !== id);
-    render();
+  const data = rows();
+  if (data.length > 998) {
+    const next = data.slice();
+    next[1] = data[998];
+    next[998] = data[1];
+    rows(next);
   }
 });

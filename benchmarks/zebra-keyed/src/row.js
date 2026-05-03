@@ -1,48 +1,44 @@
-import { View, html } from '@matthewp/zebra';
+import { View, Tr, Td, Anchor, Span, signal, effect } from '@matthewp/zebra';
 
 export class RowView extends View {
-  id = undefined;
-  label = undefined;
-  selected = false;
-
-  idText;
-  lblText;
-
-  template() {
-    return html`<tr><td class="col-md-1"> </td><td class="col-md-4"><a class="lbl"> </a></td><td class="col-md-1"><a class="remove"><span class="remove glyphicon glyphicon-remove" aria-hidden="true"></span></a></td><td class="col-md-6"></td></tr>`;
+  constructor(item) {
+    super();
+    this.id = item.id;
+    this.label = signal(item.label);
+    this.selected = signal(item.selected);
   }
 
-  mount(el) {
-    super.mount(el);
-    this.idText = el.firstChild.firstChild;
-    this.lblText = el.firstChild.nextSibling.firstChild.firstChild;
+  render() {
+    const row = new Tr();
+
+    const idTd = new Td().addClass('col-md-1').setText(String(this.id));
+
+    const lblA = new Anchor()
+      .addClass('lbl')
+      .on('click', () => this.emit('row-select', { id: this.id }));
+    const lblTd = new Td().addClass('col-md-4').append(lblA);
+
+    const removeIcon = new Span()
+      .addClass('remove glyphicon glyphicon-remove')
+      .setAttribute('aria-hidden', 'true');
+    const removeA = new Anchor()
+      .addClass('remove')
+      .on('click', () => this.emit('row-remove', { id: this.id }))
+      .append(removeIcon);
+    const removeTd = new Td().addClass('col-md-1').append(removeA);
+
+    const filler = new Td().addClass('col-md-6');
+
+    row.append(idTd, lblTd, removeTd, filler);
+
+    effect(() => lblA.setText(this.label()));
+    effect(() => row.toggleClass('danger', this.selected()));
+
+    return row;
   }
 
-  setId(value) {
-    if (this.id !== value) {
-      this.id = value;
-      this.idText.data = value;
-    }
-  }
-
-  setLabel(value) {
-    if (this.label !== value) {
-      this.label = value;
-      this.lblText.data = value;
-    }
-  }
-
-  setSelected(value) {
-    if (this.selected !== value) {
-      this.selected = value;
-      this.el.className = value ? 'danger' : '';
-    }
-  }
-
-  update(data = {}) {
-    if ('id' in data) this.setId(data.id);
-    if ('label' in data) this.setLabel(data.label);
-    if ('selected' in data) this.setSelected(data.selected);
-    return this.el;
+  update(item) {
+    if (this.label() !== item.label) this.label(item.label);
+    if (this.selected() !== item.selected) this.selected(item.selected);
   }
 }
