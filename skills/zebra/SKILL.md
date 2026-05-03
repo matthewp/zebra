@@ -9,6 +9,8 @@ Zebra is a class-based view framework. Views are plain classes; you build DOM tr
 
 The framework leans into imperative DOM construction. Instead of a template DSL, you call methods like `.append()`, `.addClass()`, `.setText()` to build a tree and `effect(() => ...)` to keep parts of it in sync with signals.
 
+> **Astro projects:** see [astro.md](./astro.md) for the `@matthewp/zebra-astro` integration's authoring conventions.
+
 ## Anatomy of a View
 
 ```javascript
