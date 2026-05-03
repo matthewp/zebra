@@ -1,0 +1,20 @@
+---
+import Counter from '../views/counter.ts';
+---
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Zebra + Astro</title>
+  </head>
+  <body>
+    <h1>Zebra + Astro</h1>
+
+    <h2>SSR'd then hydrated</h2>
+    <p>Rendered on the server, then hydrated on load:</p>
+    <Counter initial={5} client:load />
+
+    <h2>Client-only</h2>
+    <p>Mounted fresh in the browser, no SSR HTML:</p>
+    <Counter initial={0} client:only="@matthewp/zebra" />
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "@matthewp/zebra-astro-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@matthewp/zebra": "*",
+    "@matthewp/zebra-astro": "*",
+    "astro": "^5.0.0"
+  }
+}
