@@ -1,0 +1,35 @@
+{
+  "name": "@matthewp/zebra-astro",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server.js": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./client.js": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "@matthewp/zebra": "^0.1.5",
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "@matthewp/zebra": "*",
+    "astro": "^5.0.0",
+    "typescript": "^5.8.0"
+  }
+}
