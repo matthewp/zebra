@@ -376,3 +376,34 @@ h1 {
   font-size: 0.9rem;
   color: #666;
 }
+
+/* Clock */
+.clock {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 0;
+}
+
+.clock svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.clock .face {
+  color: #1a1a1a;
+}
+
+.clock .subsecond {
+  color: silver;
+}
+
+.clock .hour,
+.clock .minute {
+  color: #222;
+}
+
+.clock .second {
+  color: tomato;
+}

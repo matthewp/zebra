@@ -5,6 +5,7 @@ import { TempConverter } from './temp-converter.ts';
 import { SearchFilter } from './search-filter.ts';
 import { TodoApp } from './todo/todo-app.ts';
 import { Weather } from './weather/weather.ts';
+import { Clock } from './clock/clock.ts';
 import { Tabs } from './tabs.ts';
 
 export class App extends View {
@@ -15,6 +16,7 @@ export class App extends View {
     { label: 'Temp Converter', view: new TempConverter() },
     { label: 'Search Filter', view: new SearchFilter() },
     { label: 'Weather', view: new Weather() },
+    { label: 'Clock', view: new Clock() },
   ]);
 
   render(): Element {
