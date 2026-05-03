@@ -151,10 +151,10 @@ export abstract class Node {
 
 export class Element extends Node {
   protected _tag: string;
-  protected _attrs = new Map<string, string>();
-  protected _classes = new Set<string>();
-  protected _style = new Map<string, string>();
-  protected _listeners: Array<[string, EventListener]> = [];
+  protected _attrs: Map<string, string> | null = null;
+  protected _classes: Set<string> | null = null;
+  protected _style: Map<string, string> | null = null;
+  protected _listeners: Array<[string, EventListener]> | null = null;
   el: HTMLElement | null = null;
 
   constructor(tag: string) {
@@ -190,75 +190,100 @@ export class Element extends Node {
   }
 
   setAttribute(name: string, value: string): this {
-    this._attrs.set(name, value);
+    (this._attrs ??= new Map()).set(name, value);
     if (this.el) this.el.setAttribute(name, value);
     return this;
   }
 
   removeAttribute(name: string): this {
-    this._attrs.delete(name);
+    this._attrs?.delete(name);
     if (this.el) this.el.removeAttribute(name);
     return this;
   }
 
   toggleAttribute(name: string, force?: boolean): this {
-    const has = this._attrs.has(name);
+    const has = this._attrs !== null && this._attrs.has(name);
     const shouldHave = force === undefined ? !has : force;
-    if (shouldHave) this._attrs.set(name, '');
-    else this._attrs.delete(name);
+    if (shouldHave) (this._attrs ??= new Map()).set(name, '');
+    else this._attrs?.delete(name);
     if (this.el) this.el.toggleAttribute(name, force);
     return this;
   }
 
   addClass(...classes: string[]): this {
+    if (classes.length === 0) return this;
+    if (classes.length === 1) {
+      const c = classes[0];
+      if (c && c.indexOf(' ') === -1 && c.indexOf('\t') === -1 && c.indexOf('\n') === -1) {
+        (this._classes ??= new Set()).add(c);
+        if (this.el) this.el.classList.add(c);
+        return this;
+      }
+    }
     const tokens = splitClasses(classes);
-    for (const c of tokens) this._classes.add(c);
-    if (this.el && tokens.length) this.el.classList.add(...tokens);
+    if (tokens.length === 0) return this;
+    const set = (this._classes ??= new Set());
+    for (const c of tokens) set.add(c);
+    if (this.el) this.el.classList.add(...tokens);
     return this;
   }
 
   removeClass(...classes: string[]): this {
+    if (classes.length === 0) return this;
+    if (classes.length === 1) {
+      const c = classes[0];
+      if (c && c.indexOf(' ') === -1 && c.indexOf('\t') === -1 && c.indexOf('\n') === -1) {
+        this._classes?.delete(c);
+        if (this.el) this.el.classList.remove(c);
+        return this;
+      }
+    }
     const tokens = splitClasses(classes);
-    for (const c of tokens) this._classes.delete(c);
-    if (this.el && tokens.length) this.el.classList.remove(...tokens);
+    if (tokens.length === 0) return this;
+    if (this._classes) {
+      for (const c of tokens) this._classes.delete(c);
+    }
+    if (this.el) this.el.classList.remove(...tokens);
     return this;
   }
 
   toggleClass(name: string, force?: boolean): this {
-    const has = this._classes.has(name);
+    const set = this._classes;
+    const has = set !== null && set.has(name);
+    if (force !== undefined && force === has) return this;
     const shouldHave = force === undefined ? !has : force;
-    if (shouldHave) this._classes.add(name);
-    else this._classes.delete(name);
-    if (this.el) this.el.classList.toggle(name, force);
+    if (shouldHave) (this._classes ??= new Set()).add(name);
+    else if (set) set.delete(name);
+    if (this.el) this.el.classList.toggle(name, shouldHave);
     return this;
   }
 
   setStyle(prop: string, value: string): this {
-    this._style.set(prop, value);
+    (this._style ??= new Map()).set(prop, value);
     if (this.el) this.el.style.setProperty(prop, value);
     return this;
   }
 
   removeStyle(prop: string): this {
-    this._style.delete(prop);
+    this._style?.delete(prop);
     if (this.el) this.el.style.removeProperty(prop);
     return this;
   }
 
   show(): this {
-    this._style.delete('display');
+    this._style?.delete('display');
     if (this.el) this.el.style.removeProperty('display');
     return this;
   }
 
   hide(): this {
-    this._style.set('display', 'none');
+    (this._style ??= new Map()).set('display', 'none');
     if (this.el) this.el.style.display = 'none';
     return this;
   }
 
   on(event: string, handler: EventListener): this {
-    this._listeners.push([event, handler]);
+    (this._listeners ??= []).push([event, handler]);
     if (this.el) this.el.addEventListener(event, handler);
     return this;
   }
@@ -313,8 +338,10 @@ export class Element extends Node {
     if (this.el) return this;
     this.el = el;
 
-    for (const [event, handler] of this._listeners) {
-      el.addEventListener(event, handler);
+    if (this._listeners) {
+      for (const [event, handler] of this._listeners) {
+        el.addEventListener(event, handler);
+      }
     }
 
     let cursor: ChildNode | null = el.firstChild;
@@ -343,24 +370,30 @@ export class Element extends Node {
     const el = document.createElement(this._tag);
     this.el = el;
 
-    for (const [name, value] of this._attrs) {
-      el.setAttribute(name, value);
+    if (this._attrs) {
+      for (const [name, value] of this._attrs) {
+        el.setAttribute(name, value);
+      }
     }
 
-    if (this._classes.size > 0) {
+    if (this._classes && this._classes.size > 0) {
       el.className = Array.from(this._classes).join(' ');
     }
 
-    for (const [prop, value] of this._style) {
-      el.style.setProperty(prop, value);
+    if (this._style) {
+      for (const [prop, value] of this._style) {
+        el.style.setProperty(prop, value);
+      }
     }
 
     for (const child of this._children) {
       el.append(child instanceof Node ? child.toDOM() : child);
     }
 
-    for (const [event, handler] of this._listeners) {
-      el.addEventListener(event, handler);
+    if (this._listeners) {
+      for (const [event, handler] of this._listeners) {
+        el.addEventListener(event, handler);
+      }
     }
 
     return el;
@@ -369,19 +402,21 @@ export class Element extends Node {
   toString(): string {
     let html = `<${this._tag}`;
 
-    if (this._classes.size > 0) {
+    if (this._classes && this._classes.size > 0) {
       html += ` class="${escapeAttr(Array.from(this._classes).join(' '))}"`;
     }
 
-    if (this._style.size > 0) {
+    if (this._style && this._style.size > 0) {
       const styleStr = Array.from(this._style.entries())
         .map(([k, v]) => `${k}: ${v}`)
         .join('; ');
       html += ` style="${escapeAttr(styleStr)}"`;
     }
 
-    for (const [name, value] of this._attrs) {
-      html += ` ${name}="${escapeAttr(value)}"`;
+    if (this._attrs) {
+      for (const [name, value] of this._attrs) {
+        html += ` ${name}="${escapeAttr(value)}"`;
+      }
     }
 
     html += '>';
@@ -448,7 +483,7 @@ export class Input extends Element {
   }
 
   getValue(): string {
-    return this.el ? (this.el as HTMLInputElement).value : (this._attrs.get('value') ?? '');
+    return this.el ? (this.el as HTMLInputElement).value : (this._attrs?.get('value') ?? '');
   }
 
   setChecked(value: boolean): this {
@@ -458,7 +493,7 @@ export class Input extends Element {
   }
 
   isChecked(): boolean {
-    return this.el ? (this.el as HTMLInputElement).checked : this._attrs.has('checked');
+    return this.el ? (this.el as HTMLInputElement).checked : (this._attrs?.has('checked') ?? false);
   }
 }
 
@@ -486,7 +521,7 @@ export class Select extends Element {
   }
 
   getValue(): string {
-    return this.el ? (this.el as HTMLSelectElement).value : (this._attrs.get('value') ?? '');
+    return this.el ? (this.el as HTMLSelectElement).value : (this._attrs?.get('value') ?? '');
   }
 }
 export class Label extends Element { constructor() { super('label'); } }

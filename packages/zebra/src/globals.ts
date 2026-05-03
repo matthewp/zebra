@@ -18,15 +18,36 @@ interface BootedEntry {
 }
 
 let observer: MutationObserver | null = null;
+let cleanupScheduled = false;
 const booted = new Set<BootedEntry>();
+
+function runCleanup(): void {
+  cleanupScheduled = false;
+  for (const entry of booted) {
+    if (!entry.scopeEl.isConnected) {
+      entry.cleanup();
+      booted.delete(entry);
+    }
+  }
+  if (booted.size === 0 && observer) {
+    observer.disconnect();
+    observer = null;
+  }
+}
+
+function scheduleCleanup(): void {
+  if (cleanupScheduled) return;
+  cleanupScheduled = true;
+  queueMicrotask(runCleanup);
+}
 
 function ensureObserver(): void {
   if (observer) return;
-  observer = new MutationObserver(() => {
-    for (const entry of booted) {
-      if (!entry.scopeEl.isConnected) {
-        entry.cleanup();
-        booted.delete(entry);
+  observer = new MutationObserver(records => {
+    for (let i = 0; i < records.length; i++) {
+      if (records[i].removedNodes.length > 0) {
+        scheduleCleanup();
+        return;
       }
     }
   });
