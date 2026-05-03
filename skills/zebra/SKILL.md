@@ -535,6 +535,33 @@ The framework provides typed methods for every common DOM operation. Use them in
 
 The only legitimate raw-DOM access is reading layout values, and `measure(fn)` covers that.
 
+Two patterns beyond single-value reads:
+
+**Hit-testing multiple views** — iterate views and `measure` each:
+
+```ts
+findColumnAt(x, y) {
+  for (const col of this.columns) {
+    const hit = col.measure(el => {
+      const r = el.getBoundingClientRect();
+      return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+    });
+    if (hit) return col;
+  }
+}
+```
+
+**Send a View through an event detail** — when the receiver needs to measure the emitter, pass the View itself; don't fish through `e.target`:
+
+```ts
+// emitter
+this.emit('grab', { view: this, ... });
+
+// receiver
+const { view } = e.detail;
+const rect = view.measure(el => el.getBoundingClientRect());
+```
+
 ### State lives in signals
 
 Don't write `this.count = newValue` and update the DOM by hand. Put state in signals, let an effect update the DOM. Setters with equality guards are unnecessary — signals don't notify when value is unchanged.
