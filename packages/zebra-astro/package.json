@@ -1,6 +1,6 @@
 {
   "name": "@matthewp/zebra-astro",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "exports": {
     ".": {
@@ -24,7 +24,7 @@
     "test": "tsc -p tsconfig.test.json"
   },
   "peerDependencies": {
-    "@matthewp/zebra": "^0.1.5",
+    "@matthewp/zebra": "^0.2.0",
     "astro": "^5.0.0"
   },
   "devDependencies": {
