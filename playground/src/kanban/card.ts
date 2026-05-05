@@ -19,9 +19,13 @@ export class CardView extends View {
   }
 
   render(): Element {
-    const root = new Div().addClass('kanban-card');
+    const root = new Div()
+      .addClass('kanban-card')
+      .toggleClass('dragging', () => this.draggedCardId() === this.card().id);
 
-    const text = new Span().addClass('kanban-card-text');
+    const text = new Span()
+      .addClass('kanban-card-text')
+      .setText(() => this.card().text);
 
     const input = new Input()
       .addClass('kanban-card-edit')
@@ -39,10 +43,6 @@ export class CardView extends View {
       });
 
     effect(() => {
-      text.setText(this.card().text);
-    });
-
-    effect(() => {
       const isEditing = this.editing();
       if (isEditing) {
         text.hide();
@@ -56,10 +56,6 @@ export class CardView extends View {
         text.show();
         input.hide();
       }
-    });
-
-    effect(() => {
-      root.toggleClass('dragging', this.draggedCardId() === this.card().id);
     });
 
     input

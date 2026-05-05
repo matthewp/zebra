@@ -1,4 +1,4 @@
-import { Element, type Child } from './element.ts';
+import { Element, type Child, type Reactive } from './element.ts';
 import { getActiveSub, setActiveSub } from 'alien-signals';
 import { getActiveView, setActiveView, type GlobalTarget } from './globals.ts';
 
@@ -44,12 +44,12 @@ export class View extends Element {
     return this;
   }
 
-  setText(text: string): this {
+  setText(text: Reactive<string | number>): this {
     this._getRendered().setText(text);
     return this;
   }
 
-  setAttribute(name: string, value: string): this {
+  setAttribute(name: string, value: Reactive<string>): this {
     this._getRendered().setAttribute(name, value);
     return this;
   }
@@ -59,7 +59,7 @@ export class View extends Element {
     return this;
   }
 
-  toggleAttribute(name: string, force?: boolean): this {
+  toggleAttribute(name: string, force?: Reactive<boolean>): this {
     this._getRendered().toggleAttribute(name, force);
     return this;
   }
@@ -74,12 +74,12 @@ export class View extends Element {
     return this;
   }
 
-  toggleClass(name: string, force?: boolean): this {
+  toggleClass(name: string, force?: Reactive<boolean>): this {
     this._getRendered().toggleClass(name, force);
     return this;
   }
 
-  setStyle(prop: string, value: string): this {
+  setStyle(prop: string, value: Reactive<string>): this {
     this._getRendered().setStyle(prop, value);
     return this;
   }
@@ -99,12 +99,22 @@ export class View extends Element {
     return this;
   }
 
+  toggleVisible(visible: Reactive<boolean>): this {
+    this._getRendered().toggleVisible(visible);
+    return this;
+  }
+
+  setDisabled(disabled: Reactive<boolean>): this {
+    this._getRendered().setDisabled(disabled);
+    return this;
+  }
+
   on(event: string, handler: EventListener): this {
     this._getRendered().on(event, handler);
     return this;
   }
 
-  setHTML(html: string): this {
+  setHTML(html: Reactive<string>): this {
     const r = this._getRendered();
     if (r instanceof Element) r.setHTML(html);
     return this;

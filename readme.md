@@ -15,20 +15,16 @@ The agent installs the Zebra skill, learns the framework's conventions, then wal
 ## Counter example
 
 ```js
-import { View, Div, Span, Button, signal, effect } from '@matthewp/zebra';
+import { View, Div, Span, Button, signal } from '@matthewp/zebra';
 
 class Counter extends View {
   count = signal(0);
 
   render() {
-    const root = new Div().addClass('counter');
-    const span = new Span();
-    const inc = new Button().setText('+').on('click', () => this.count(this.count() + 1));
-
-    effect(() => span.setText(String(this.count())));
-
-    root.append(span, inc);
-    return root;
+    return new Div().addClass('counter').append(
+      new Span().setText(this.count),
+      new Button().setText('+').on('click', () => this.count(this.count() + 1)),
+    );
   }
 }
 
