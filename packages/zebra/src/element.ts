@@ -1,3 +1,7 @@
+import { effect } from 'alien-signals';
+
+export type Reactive<T> = T | (() => T);
+
 const ESC: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -45,12 +49,20 @@ export abstract class Node {
     return this;
   }
 
-  setText(text: string): this {
-    this._children = [text];
+  setText(text: Reactive<string | number>): this {
+    if (typeof text === 'function') {
+      effect(() => this.setText(text()));
+      return this;
+    }
+    this._children = [typeof text === 'string' ? text : String(text)];
     return this;
   }
 
-  setAttribute(name: string, value: string): this {
+  setAttribute(name: string, value: Reactive<string>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setAttribute(name, value()));
+      return this;
+    }
     for (const child of this._children) {
       if (child instanceof Node) child.setAttribute(name, value);
     }
@@ -64,7 +76,11 @@ export abstract class Node {
     return this;
   }
 
-  toggleAttribute(name: string, force?: boolean): this {
+  toggleAttribute(name: string, force?: Reactive<boolean>): this {
+    if (typeof force === 'function') {
+      effect(() => this.toggleAttribute(name, force()));
+      return this;
+    }
     for (const child of this._children) {
       if (child instanceof Node) child.toggleAttribute(name, force);
     }
@@ -85,14 +101,22 @@ export abstract class Node {
     return this;
   }
 
-  toggleClass(name: string, force?: boolean): this {
+  toggleClass(name: string, force?: Reactive<boolean>): this {
+    if (typeof force === 'function') {
+      effect(() => this.toggleClass(name, force()));
+      return this;
+    }
     for (const child of this._children) {
       if (child instanceof Node) child.toggleClass(name, force);
     }
     return this;
   }
 
-  setStyle(prop: string, value: string): this {
+  setStyle(prop: string, value: Reactive<string>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setStyle(prop, value()));
+      return this;
+    }
     for (const child of this._children) {
       if (child instanceof Node) child.setStyle(prop, value);
     }
@@ -118,6 +142,18 @@ export abstract class Node {
       if (child instanceof Node) child.hide();
     }
     return this;
+  }
+
+  toggleVisible(visible: Reactive<boolean>): this {
+    if (typeof visible === 'function') {
+      effect(() => this.toggleVisible(visible()));
+      return this;
+    }
+    return visible ? this.show() : this.hide();
+  }
+
+  setDisabled(disabled: Reactive<boolean>): this {
+    return this.toggleAttribute('disabled', disabled);
   }
 
   on(event: string, handler: EventListener): this {
@@ -183,13 +219,22 @@ export class Element extends Node {
     return this;
   }
 
-  setText(text: string): this {
-    this._children = [text];
-    if (this.el) this.el.textContent = text;
+  setText(text: Reactive<string | number>): this {
+    if (typeof text === 'function') {
+      effect(() => this.setText(text()));
+      return this;
+    }
+    const s = typeof text === 'string' ? text : String(text);
+    this._children = [s];
+    if (this.el) this.el.textContent = s;
     return this;
   }
 
-  setAttribute(name: string, value: string): this {
+  setAttribute(name: string, value: Reactive<string>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setAttribute(name, value()));
+      return this;
+    }
     (this._attrs ??= new Map()).set(name, value);
     if (this.el) this.el.setAttribute(name, value);
     return this;
@@ -201,7 +246,11 @@ export class Element extends Node {
     return this;
   }
 
-  toggleAttribute(name: string, force?: boolean): this {
+  toggleAttribute(name: string, force?: Reactive<boolean>): this {
+    if (typeof force === 'function') {
+      effect(() => this.toggleAttribute(name, force()));
+      return this;
+    }
     const has = this._attrs !== null && this._attrs.has(name);
     const shouldHave = force === undefined ? !has : force;
     if (shouldHave) (this._attrs ??= new Map()).set(name, '');
@@ -247,7 +296,11 @@ export class Element extends Node {
     return this;
   }
 
-  toggleClass(name: string, force?: boolean): this {
+  toggleClass(name: string, force?: Reactive<boolean>): this {
+    if (typeof force === 'function') {
+      effect(() => this.toggleClass(name, force()));
+      return this;
+    }
     const set = this._classes;
     const has = set !== null && set.has(name);
     if (force !== undefined && force === has) return this;
@@ -258,7 +311,11 @@ export class Element extends Node {
     return this;
   }
 
-  setStyle(prop: string, value: string): this {
+  setStyle(prop: string, value: Reactive<string>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setStyle(prop, value()));
+      return this;
+    }
     (this._style ??= new Map()).set(prop, value);
     if (this.el) this.el.style.setProperty(prop, value);
     return this;
@@ -317,7 +374,11 @@ export class Element extends Node {
     return this.el ? fn(this.el) : undefined;
   }
 
-  setHTML(html: string): this {
+  setHTML(html: Reactive<string>): this {
+    if (typeof html === 'function') {
+      effect(() => this.setHTML(html()));
+      return this;
+    }
     this._children = [new RawHTML(html)];
     if (this.el) this.el.innerHTML = html;
     return this;
@@ -476,9 +537,14 @@ export class Button extends Element { constructor() { super('button'); } }
 export class Input extends Element {
   constructor() { super('input'); }
 
-  setValue(value: string): this {
-    if (this.el) (this.el as HTMLInputElement).value = value;
-    else this.setAttribute('value', value);
+  setValue(value: Reactive<string | number>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setValue(value()));
+      return this;
+    }
+    const s = typeof value === 'string' ? value : String(value);
+    if (this.el) (this.el as HTMLInputElement).value = s;
+    else this.setAttribute('value', s);
     return this;
   }
 
@@ -486,7 +552,11 @@ export class Input extends Element {
     return this.el ? (this.el as HTMLInputElement).value : (this._attrs?.get('value') ?? '');
   }
 
-  setChecked(value: boolean): this {
+  setChecked(value: Reactive<boolean>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setChecked(value()));
+      return this;
+    }
     if (this.el) (this.el as HTMLInputElement).checked = value;
     else this.toggleAttribute('checked', value);
     return this;
@@ -500,9 +570,14 @@ export class Input extends Element {
 export class Textarea extends Element {
   constructor() { super('textarea'); }
 
-  setValue(value: string): this {
-    if (this.el) (this.el as HTMLTextAreaElement).value = value;
-    else this.setText(value);
+  setValue(value: Reactive<string | number>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setValue(value()));
+      return this;
+    }
+    const s = typeof value === 'string' ? value : String(value);
+    if (this.el) (this.el as HTMLTextAreaElement).value = s;
+    else this.setText(s);
     return this;
   }
 
@@ -514,9 +589,14 @@ export class Textarea extends Element {
 export class Select extends Element {
   constructor() { super('select'); }
 
-  setValue(value: string): this {
-    if (this.el) (this.el as HTMLSelectElement).value = value;
-    else this.setAttribute('value', value);
+  setValue(value: Reactive<string | number>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setValue(value()));
+      return this;
+    }
+    const s = typeof value === 'string' ? value : String(value);
+    if (this.el) (this.el as HTMLSelectElement).value = s;
+    else this.setAttribute('value', s);
     return this;
   }
 

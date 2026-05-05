@@ -14,24 +14,16 @@ The framework leans into imperative DOM construction. Instead of a template DSL,
 ## Anatomy of a View
 
 ```javascript
-import { View, Div, Span, Button, signal, effect } from '@matthewp/zebra';
+import { View, Div, Span, Button, signal } from '@matthewp/zebra';
 
 class Counter extends View {
   count = signal(0);
 
   render() {
-    const root = new Div().addClass('counter');
-    const span = new Span();
-    const inc = new Button()
-      .setText('+')
-      .on('click', () => this.count(this.count() + 1));
-
-    effect(() => {
-      span.setText(String(this.count()));
-    });
-
-    root.append(span, inc);
-    return root;
+    return new Div().addClass('counter').append(
+      new Span().setText(this.count),
+      new Button().setText('+').on('click', () => this.count(this.count() + 1)),
+    );
   }
 }
 ```
@@ -39,7 +31,7 @@ class Counter extends View {
 Three building blocks:
 
 1. **State fields** declared as `signal(...)`, `computed(...)`, or plain values.
-2. **`render()`** builds the element tree, wires events with `.on()`, wires reactivity with `effect()`, and returns the root `Element`.
+2. **`render()`** builds the element tree, wires events with `.on()`, and returns the root `Element`. Mutation methods accept signals directly; reach for `effect()` when one body must touch multiple nodes.
 3. **Event handlers** are regular methods (or inline arrows) that update signals.
 
 ## The Class Hierarchy
@@ -181,40 +173,66 @@ count(7);       // logs "count is 7"
 - **`computed(() => ...)`** — derived value from one or more signals. Cached; only recomputes when dependencies change.
 - **`effect(() => ...)`** — side effect (DOM update, log, fetch). Re-runs whenever a signal it read changes.
 
-### Effects for DOM updates
+### Binding signals to the DOM
 
-Inside `render()`, use `effect()` to bind reactive state to the DOM:
+Mutation methods accept either a static value **or** a zero-arg getter (`Reactive<T>`). Pass a signal directly and the framework wires the effect for you:
 
 ```javascript
-effect(() => {
-  span.setText(String(this.count()));
-});
-
-effect(() => {
-  button.toggleClass('active', this.isActive());
-});
-
-effect(() => {
-  link.setAttribute('href', this.url());
-});
-
-effect(() => {
-  this.isVisible() ? content.show() : content.hide();
-});
+span.setText(this.count);                       // signal getter
+button.toggleClass('active', this.isActive);    // signal getter
+link.setAttribute('href', this.url);
+content.toggleVisible(this.isVisible);
+input.setDisabled(this.busy);
 ```
 
-Multiple operations in one effect is fine — they all run together when any read signal changes:
+Methods that accept `Reactive<T>`:
+
+- `setText(text)`, `setHTML(html)`
+- `setAttribute(name, value)`, `toggleAttribute(name, force)`
+- `toggleClass(name, force)`
+- `setStyle(prop, value)`
+- `toggleVisible(visible)` — pairs with `show()`/`hide()`
+- `setDisabled(disabled)` — pairs with `disable()`/`enable()`
+- `setValue(value)` (Input/Textarea/Select), `setChecked(value)` (Input)
+
+`setText` and `setValue` accept `string | number` — the framework coerces.
+
+For derived values, use `computed`:
 
 ```javascript
+render() {
+  const greeting = computed(() => `Hello, ${this.name()}`);
+  return new H1().setText(greeting);
+}
+```
+
+**Inline `computed` inside `render()` when it's only used to set a DOM value.** Promote it to a class field only when something outside `render()` reads it (event handlers, `toJSON()`, parents, subclasses) — keeping render-local computeds local keeps the class shape focused on actual state.
+
+### Use `effect()` for grouped updates
+
+When several DOM mutations all depend on the **same** signal, write one `effect()` rather than N signal-direct bindings. One effect = one subscription = one notification per change. Three signal-direct bindings on the same signal = three subscriptions and three dispatches.
+
+```javascript
+// Good — one effect, one subscription on this.todo
 effect(() => {
   const t = this.todo();
   text.setText(t.text);
   checkbox.setChecked(t.done);
   root.toggleClass('completed', t.done);
 });
+
+// Bad — three separate effects, three notifications per todo change
+text.setText(() => this.todo().text);
+checkbox.setChecked(() => this.todo().done);
+root.toggleClass('completed', () => this.todo().done);
 ```
 
-Effects run **immediately** the first time they're set up (during `render()`), so initial state lands without any extra plumbing.
+Rule of thumb:
+
+- **Signal-direct** when a binding reads one signal and updates one thing.
+- **`effect()`** when several mutations share a signal, or when the body needs intermediate variables.
+
+Effects (and signal-direct bindings) run **immediately** the first time they're set up, so initial state lands without any extra plumbing.
 
 ## Events
 
@@ -590,16 +608,8 @@ class App extends View {
 
 ```javascript
 render() {
-  const root = new Div();
-  const text = new Span();
-
-  // Static structure
-  root.append(text);
-
-  // Reactive bits
-  effect(() => text.setText(String(this.count())));
-
-  return root;
+  const text = new Span().setText(this.count);
+  return new Div().append(text);
 }
 ```
 
@@ -615,20 +625,24 @@ Children expose `update(data)` for parents to push state down (used by `List`). 
 |---|---|
 | `append(...children)` | Append nodes/strings |
 | `prepend(...children)` | Prepend nodes/strings |
-| `setText(s)` | Replace children with text |
-| `setAttribute(name, val)` | Set attribute |
+| `setText(s)` | Replace children with text. `s` is `Reactive<string \| number>` |
+| `setAttribute(name, val)` | Set attribute. `val` is `Reactive<string>` |
 | `removeAttribute(name)` | Remove attribute |
-| `toggleAttribute(name, force?)` | Toggle attribute (boolean attrs) |
+| `toggleAttribute(name, force?)` | Toggle attribute (boolean attrs). `force` is `Reactive<boolean>` |
 | `addClass(...)` / `removeClass(...)` | Class manipulation; each arg may be a single class or a space-separated list (`addClass('flex items-center px-4')`) |
-| `toggleClass(name, force?)` | Toggle class |
-| `setStyle(prop, val)` / `removeStyle(prop)` | Inline style |
+| `toggleClass(name, force?)` | Toggle class. `force` is `Reactive<boolean>` |
+| `setStyle(prop, val)` / `removeStyle(prop)` | Inline style. `val` is `Reactive<string>` |
 | `show()` / `hide()` | Toggle `display` |
+| `toggleVisible(visible)` | Show or hide. `visible` is `Reactive<boolean>` |
+| `setDisabled(disabled)` | Toggle `disabled` attr. `disabled` is `Reactive<boolean>` |
 | `on(event, handler)` | Add event listener |
 | `clear()` | Remove all children |
 | `disable()` / `enable()` | Toggle `disabled` attr |
 | `mount(container)` | Build DOM and append to container |
 | `hydrate(el)` | Adopt existing DOM (from SSR) — bind `el`, attach listeners, recurse into children |
 | `toDOM()` / `toString()` | Build DOM / serialize to HTML string |
+
+`Reactive<T>` means either a static value or a zero-arg getter (signal/computed/closure). Pass a getter to bind reactively without writing an explicit `effect()`.
 
 On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to element children.
 
@@ -641,21 +655,21 @@ On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to e
 | `focus()` / `blur()` | Native focus control |
 | `isFocused()` | Whether `document.activeElement === el` |
 | `measure(fn)` | Read layout values: `el.measure(e => e.offsetLeft)` |
-| `setHTML(html)` | Set innerHTML (escape hatch) |
+| `setHTML(html)` | Set innerHTML (escape hatch). `html` is `Reactive<string>` |
 | `remove()` | Detach from parent DOM |
 
 ### `Input` (additional)
 
 | Method | Description |
 |---|---|
-| `setValue(s)` / `getValue()` | Text input value |
-| `setChecked(b)` / `isChecked()` | Checkbox state |
+| `setValue(s)` / `getValue()` | Text input value. `s` is `Reactive<string \| number>` |
+| `setChecked(b)` / `isChecked()` | Checkbox state. `b` is `Reactive<boolean>` |
 
 ### `Textarea`, `Select`
 
 | Method | Description |
 |---|---|
-| `setValue(s)` / `getValue()` | Value |
+| `setValue(s)` / `getValue()` | Value. `s` is `Reactive<string \| number>` |
 
 ### Tag subclasses available
 
@@ -674,11 +688,13 @@ For tags not in this list, use `new Element('section')` style — but prefer the
 
 1. **Detect file extension**: Check for `tsconfig.json` or existing `.ts` files. Use `.ts` if found, otherwise `.js`.
 2. Define class extending `View`.
-3. Declare state as `signal(...)`/`computed(...)` fields. Declare child views as fields too.
+3. Declare signals as fields. Promote a `computed` to a field only when it's read outside `render()` (event handlers, `toJSON()`, parents, subclasses). Declare child views as fields too.
 4. Implement `render()`:
    - Build the static tree with `new Div()`/`new Span()`/etc, chained calls.
    - Append children. Wire events with `.on()`.
-   - Wrap reactive bits in `effect()`. One effect can touch multiple nodes.
+   - For single-field reactive bindings, pass the signal directly to mutation methods (`setText(this.count)`).
+   - For derived values used only to set DOM, declare a `const fullName = computed(...)` inside `render()` and pass it to the mutation method.
+   - For grouped updates that share a signal, write one `effect()` that touches multiple nodes.
    - Return the root element.
 5. Add event handlers as methods. They typically just write to signals (state) — let effects propagate to the DOM.
 6. If the view will be used inside a `List`, implement `update(item)` to write the new item into a signal.

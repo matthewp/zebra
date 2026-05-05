@@ -1,4 +1,4 @@
-import { View, Div, Span, Button, signal, effect, type Element } from '@matthewp/zebra';
+import { View, Div, Span, Button, signal, type Element } from '@matthewp/zebra';
 
 export class Counter extends View {
   count = signal(0);
@@ -8,16 +8,11 @@ export class Counter extends View {
     const root = new Div().addClass('counter');
     const decrement = new Button().addClass('decrement').setText('-')
       .on('click', () => this.onDecrementClick());
-    const span = new Span().addClass('count');
+    const span = new Span().addClass('count').setText(this.count);
     const increment = new Button().addClass('increment').setText('+')
       .on('click', () => this.onIncrementClick());
 
     root.append(decrement, span, increment);
-
-    effect(() => {
-      span.setText(String(this.count()));
-    });
-
     return root;
   }
 
