@@ -425,10 +425,18 @@ export class Element extends Node {
     return this;
   }
 
+  protected _createEl(): HTMLElement {
+    return document.createElement(this._tag);
+  }
+
+  protected _setClassName(el: HTMLElement, value: string): void {
+    el.className = value;
+  }
+
   toDOM(): HTMLElement {
     if (this.el) return this.el;
 
-    const el = document.createElement(this._tag);
+    const el = this._createEl();
     this.el = el;
 
     if (this._attrs) {
@@ -438,7 +446,7 @@ export class Element extends Node {
     }
 
     if (this._classes && this._classes.size > 0) {
-      el.className = Array.from(this._classes).join(' ');
+      this._setClassName(el, Array.from(this._classes).join(' '));
     }
 
     if (this._style) {
