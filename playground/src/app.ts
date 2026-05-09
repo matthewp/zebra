@@ -22,7 +22,7 @@ export class App extends View {
   ]);
 
   render(): Element {
-    new DocumentElement().setAttribute('data-app', 'zebra-playground');
+    new DocumentElement().setData('app', 'zebra-playground');
 
     const root = new Div().addClass('app');
     root.append(this.tabs);

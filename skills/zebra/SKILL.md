@@ -189,6 +189,7 @@ Methods that accept `Reactive<T>`:
 
 - `setText(text)`, `setHTML(html)`
 - `setAttribute(name, value)`, `toggleAttribute(name, force)`
+- `setData(key, value)` — `data-*` attributes; `key` is camelCase and gets normalized (`'userName'` → `data-user-name`)
 - `toggleClass(name, force)`
 - `setStyle(prop, value)`
 - `toggleVisible(visible)` — pairs with `show()`/`hide()`
@@ -300,7 +301,7 @@ Two rules:
 - **Construct inside `render()`** so the active-View context picks them up. A `new Document()` outside a render isn't scoped to anything and won't auto-clean.
 - **SSR-safe.** `Document` and `Window` don't touch the global `document` / `window` until the View is mounted, so `toString()` on the server is fine.
 
-For the `<html>` element specifically, use `DocumentElement`. It's an Element-shaped wrapper around `document.documentElement` — full reactive mutation surface (`setAttribute`, `addClass`, `toggleClass`, `setStyle`) plus `.on()` for listeners with the same auto-cleanup story.
+For the `<html>` element specifically, use `DocumentElement`. It's an Element-shaped wrapper around `document.documentElement` — full reactive mutation surface (`setAttribute`, `setData`, `addClass`, `toggleClass`, `setStyle`) plus `.on()` for listeners with the same auto-cleanup story.
 
 ```javascript
 import { View, Div, DocumentElement, signal } from '@matthewp/zebra';
@@ -310,7 +311,7 @@ class App extends View {
 
   render() {
     new DocumentElement()
-      .setAttribute('data-theme', this.theme)
+      .setData('theme', this.theme)
       .toggleClass('reduced-motion', this.prefersReducedMotion);
 
     return new Div().addClass('app').append(/* ... */);
@@ -685,6 +686,7 @@ Pass everything a child needs — values, signals, getters — through its const
 | `addClass(...)` / `removeClass(...)` | Class manipulation; each arg may be a single class or a space-separated list (`addClass('flex items-center px-4')`) |
 | `toggleClass(name, force?)` | Toggle class. `force` is `Reactive<boolean>` |
 | `setStyle(prop, val)` / `removeStyle(prop)` | Inline style. `val` is `Reactive<string>` |
+| `setData(key, val)` / `getData(key)` / `removeData(key)` | `data-*` attributes. `key` is camelCase (`'userName'` → `data-user-name`); `val` is `Reactive<string>` |
 | `show()` / `hide()` | Toggle `display` |
 | `toggleVisible(visible)` | Show or hide. `visible` is `Reactive<boolean>` |
 | `setDisabled(disabled)` | Toggle `disabled` attr. `disabled` is `Reactive<boolean>` |
@@ -731,7 +733,7 @@ On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to e
 |---|---|
 | `Document` | View-scoped wrapper for `document`. Use `.on(event, handler)` for global listeners |
 | `Window` | View-scoped wrapper for `window`. Use `.on(event, handler)` for global listeners |
-| `DocumentElement` | Element-shaped wrapper for `<html>`. Full reactive mutation surface (`setAttribute`, `addClass`, `toggleClass`, `setStyle`) plus `.on()`. Listeners auto-clean on view unmount; mutations are not undone |
+| `DocumentElement` | Element-shaped wrapper for `<html>`. Full reactive mutation surface (`setAttribute`, `setData`, `addClass`, `toggleClass`, `setStyle`) plus `.on()`. Listeners auto-clean on view unmount; mutations are not undone |
 
 ### Tag subclasses available
 

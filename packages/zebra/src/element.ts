@@ -23,6 +23,10 @@ const VOID_TAGS = new Set([
   'link', 'meta', 'param', 'source', 'track', 'wbr',
 ]);
 
+function camelToKebab(s: string): string {
+  return s.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+}
+
 function splitClasses(classes: string[]): string[] {
   const tokens: string[] = [];
   for (const c of classes) {
@@ -256,6 +260,29 @@ export class Element extends Node {
     if (shouldHave) (this._attrs ??= new Map()).set(name, '');
     else this._attrs?.delete(name);
     if (this.el) this.el.toggleAttribute(name, force);
+    return this;
+  }
+
+  setData(key: string, value: Reactive<string>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setData(key, value()));
+      return this;
+    }
+    const attrName = `data-${camelToKebab(key)}`;
+    (this._attrs ??= new Map()).set(attrName, value);
+    if (this.el) this.el.dataset[key] = value;
+    return this;
+  }
+
+  getData(key: string): string | undefined {
+    if (this.el) return this.el.dataset[key];
+    return this._attrs?.get(`data-${camelToKebab(key)}`);
+  }
+
+  removeData(key: string): this {
+    const attrName = `data-${camelToKebab(key)}`;
+    this._attrs?.delete(attrName);
+    if (this.el) delete this.el.dataset[key];
     return this;
   }
 
