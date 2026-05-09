@@ -3,6 +3,8 @@ import { ColumnView, type Column } from './column.ts';
 import { CardView, type Card } from './card.ts';
 import { trackDrag } from './dnd.ts';
 
+const makeCard = (id: number, text: string): Card => ({ id, text: signal(text) });
+
 interface DragState {
   cardId: number;
   card: Card;
@@ -24,16 +26,16 @@ export class KanbanBoard extends View {
     super();
     const initial: Column[] = [
       { id: 'todo', title: 'To Do', cards: [
-        { id: this.nextId++, text: 'Design the kanban demo' },
-        { id: this.nextId++, text: 'Pick a color palette' },
-        { id: this.nextId++, text: 'Write the readme' },
+        makeCard(this.nextId++, 'Design the kanban demo'),
+        makeCard(this.nextId++, 'Pick a color palette'),
+        makeCard(this.nextId++, 'Write the readme'),
       ]},
       { id: 'doing', title: 'In Progress', cards: [
-        { id: this.nextId++, text: 'Build pointer-based DnD' },
-        { id: this.nextId++, text: 'Sketch column layout' },
+        makeCard(this.nextId++, 'Build pointer-based DnD'),
+        makeCard(this.nextId++, 'Sketch column layout'),
       ]},
       { id: 'done', title: 'Done', cards: [
-        { id: this.nextId++, text: 'Brainstorm with the team' },
+        makeCard(this.nextId++, 'Brainstorm with the team'),
       ]},
     ];
     this.columns = initial.map(c => new ColumnView(c, this.draggedCardId));
@@ -56,17 +58,15 @@ export class KanbanBoard extends View {
     const { columnId, text } = e.detail as { columnId: string; text: string };
     const col = this.columnsById.get(columnId);
     if (!col) return;
-    col.setCards([...col.getCards(), { id: this.nextId++, text }]);
+    col.setCards([...col.getCards(), makeCard(this.nextId++, text)]);
   }
 
   private onCardEdit(e: CustomEvent) {
     const { id, text } = e.detail as { id: number; text: string };
     const loc = this.findCard(id);
     if (!loc) return;
-    const col = this.columnsById.get(loc.columnId)!;
-    const cards = col.getCards().slice();
-    cards[loc.index] = { ...cards[loc.index], text };
-    col.setCards(cards);
+    const card = this.columnsById.get(loc.columnId)!.getCards()[loc.index];
+    card.text(text);
   }
 
   private onCardRemove(e: CustomEvent) {

@@ -30,7 +30,7 @@ export class ColumnView extends View {
       .setText(this.column.title);
 
     const list = new List<Card>(
-      () => this.cards(),
+      this.cards,
       card => card.id,
       card => new CardView(card, this.draggedCardId),
       'div',

@@ -8,29 +8,36 @@ const nouns = ['table','chair','house','bbq','desk','car','pony','cookie','sandw
 let nextId = 1;
 const random = arr => arr[Math.floor(Math.random() * arr.length)];
 
+function makeRow() {
+  return {
+    id: nextId++,
+    label: signal(`${random(adjectives)} ${random(colours)} ${random(nouns)}`),
+    selected: signal(false),
+  };
+}
+
 function buildData(count) {
   const data = new Array(count);
-  for (let i = 0; i < count; i++) {
-    data[i] = {
-      id: nextId++,
-      label: `${random(adjectives)} ${random(colours)} ${random(nouns)}`,
-      selected: false,
-    };
-  }
+  for (let i = 0; i < count; i++) data[i] = makeRow();
   return data;
 }
 
 const rows = signal([]);
+let selectedRow = null;
 
 const list = new List(rows, row => row.id, row => new RowView(row), 'tbody')
   .on('row-select', (e) => {
     const id = e.detail.id;
-    rows(rows().map(row =>
-      row.selected === (row.id === id) ? row : { ...row, selected: row.id === id }
-    ));
+    if (selectedRow && selectedRow.id !== id) selectedRow.selected(false);
+    const next = rows().find(r => r.id === id);
+    if (next) {
+      next.selected(true);
+      selectedRow = next;
+    }
   })
   .on('row-remove', (e) => {
     const id = e.detail.id;
+    if (selectedRow && selectedRow.id === id) selectedRow = null;
     rows(rows().filter(row => row.id !== id));
   });
 
@@ -39,19 +46,27 @@ const tbody = list.toDOM();
 tbody.id = 'tbody';
 placeholder.replaceWith(tbody);
 
-document.getElementById('run').addEventListener('click', () => rows(buildData(1000)));
-document.getElementById('runlots').addEventListener('click', () => rows(buildData(10000)));
+document.getElementById('run').addEventListener('click', () => {
+  selectedRow = null;
+  rows(buildData(1000));
+});
+document.getElementById('runlots').addEventListener('click', () => {
+  selectedRow = null;
+  rows(buildData(10000));
+});
 document.getElementById('add').addEventListener('click', () => rows(rows().concat(buildData(1000))));
 
 document.getElementById('update').addEventListener('click', () => {
-  const next = rows().slice();
-  for (let i = 0; i < next.length; i += 10) {
-    next[i] = { ...next[i], label: next[i].label + ' !!!' };
+  const data = rows();
+  for (let i = 0; i < data.length; i += 10) {
+    data[i].label(data[i].label() + ' !!!');
   }
-  rows(next);
 });
 
-document.getElementById('clear').addEventListener('click', () => rows([]));
+document.getElementById('clear').addEventListener('click', () => {
+  selectedRow = null;
+  rows([]);
+});
 
 document.getElementById('swaprows').addEventListener('click', () => {
   const data = rows();

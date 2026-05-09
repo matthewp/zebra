@@ -1,52 +1,50 @@
-import { View, Li, Input, Span, Button, signal, effect, type Element } from '@matthewp/zebra';
+import { View, Li, Input, Span, Button, signal, type Element } from '@matthewp/zebra';
 
 export interface Todo {
   id: number;
-  text: string;
-  done: boolean;
+  text: ReturnType<typeof signal<string>>;
+  done: ReturnType<typeof signal<boolean>>;
 }
 
 export class TodoItem extends View {
-  todo: ReturnType<typeof signal<Todo>>;
+  private todo: Todo;
 
-  constructor(initialTodo: Todo) {
+  constructor(todo: Todo) {
     super();
-    this.todo = signal(initialTodo);
+    this.todo = todo;
   }
 
   render(): Element {
-    const root = new Li().addClass('todo-item');
-    const checkbox = new Input().addClass('todo-checkbox').setAttribute('type', 'checkbox');
-    const text = new Span().addClass('todo-item-text');
+    const root = new Li()
+      .addClass('todo-item')
+      .toggleClass('completed', this.todo.done);
+
+    const checkbox = new Input()
+      .addClass('todo-checkbox')
+      .setAttribute('type', 'checkbox')
+      .setChecked(this.todo.done)
+      .on('change', () => this.onToggle());
+
+    const text = new Span()
+      .addClass('todo-item-text')
+      .setText(this.todo.text);
+
     const del = new Button()
       .addClass('todo-delete')
       .setAttribute('type', 'button')
       .setText('×')
       .on('click', () => this.onDelete());
 
-    checkbox.on('change', () => this.onToggle());
-
-    effect(() => {
-      const t = this.todo();
-      text.setText(t.text);
-      checkbox.setChecked(t.done);
-      root.toggleClass('completed', t.done);
-    });
-
     root.append(checkbox, text, del);
     return root;
   }
 
-  update(todo: Todo) {
-    this.todo(todo);
-  }
-
   onToggle() {
-    this.emit('todo-toggle', { id: this.todo().id });
+    this.emit('todo-toggle', { id: this.todo.id });
   }
 
   onDelete() {
-    this.emit('delete', { id: this.todo().id });
+    this.emit('delete', { id: this.todo.id });
   }
 }
 

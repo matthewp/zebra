@@ -3,11 +3,17 @@ import { TodoInput } from './todo-input.ts';
 import { TodoFilter, type FilterMode } from './todo-filter.ts';
 import { TodoItem, type Todo } from './todo-item.ts';
 
+const makeTodo = (id: number, text: string, done: boolean): Todo => ({
+  id,
+  text: signal(text),
+  done: signal(done),
+});
+
 export class TodoApp extends View {
   todos = signal<Todo[]>([
-    { id: 1, text: 'Learn Zebra', done: false },
-    { id: 2, text: 'Build something cool', done: false },
-    { id: 3, text: 'Design the SSR story', done: true },
+    makeTodo(1, 'Learn Zebra', false),
+    makeTodo(2, 'Build something cool', false),
+    makeTodo(3, 'Design the SSR story', true),
   ]);
   filter = signal<FilterMode>('all');
   nextId = 4;
@@ -15,14 +21,14 @@ export class TodoApp extends View {
   filteredTodos = computed(() => {
     const f = this.filter();
     const t = this.todos();
-    if (f === 'active') return t.filter(t => !t.done);
-    if (f === 'completed') return t.filter(t => t.done);
+    if (f === 'active') return t.filter(t => !t.done());
+    if (f === 'completed') return t.filter(t => t.done());
     return t;
   });
 
   todoInput = new TodoInput();
   todoList = new List<Todo>(
-    () => this.filteredTodos(),
+    this.filteredTodos,
     todo => todo.id,
     todo => new TodoItem(todo),
     'ul',
@@ -46,16 +52,12 @@ export class TodoApp extends View {
   }
 
   onAdd(e: CustomEvent) {
-    this.todos([
-      ...this.todos(),
-      { id: this.nextId++, text: e.detail.text, done: false },
-    ]);
+    this.todos([...this.todos(), makeTodo(this.nextId++, e.detail.text, false)]);
   }
 
   onToggle(e: CustomEvent) {
-    this.todos(this.todos().map(t =>
-      t.id === e.detail.id ? { ...t, done: !t.done } : t
-    ));
+    const t = this.todos().find(t => t.id === e.detail.id);
+    if (t) t.done(!t.done());
   }
 
   onDelete(e: CustomEvent) {

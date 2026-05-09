@@ -318,65 +318,96 @@ Methods:
 
 ## Lists
 
-Use `List` for dynamic, keyed children. It does keyed reconciliation — items with the same key are updated in place rather than recreated.
+Use `List` for dynamic, keyed children. It does keyed reconciliation — same-key items at the same reference are reused; new keys create views; missing keys destroy them.
 
 ```javascript
 import { List } from '@matthewp/zebra';
 
 this.list = new List(
-  () => this.items(),                  // items source: signal getter or array
-  item => item.id,                      // key function
-  item => new ItemView(item),           // factory: creates a view for an item
-  'ul',                                 // optional: container tag (default 'div')
+  this.items,                              // items source: signal/computed getter or array
+  item => item.id,                         // key function
+  (item, index) => new ItemView(item, index), // factory: receives item + reactive index
+  'ul',                                    // optional: container tag (default 'div')
 ).addClass('item-list');
 ```
 
-When the items signal changes, `List` reconciles the DOM:
-- Items with new keys are created via the factory
-- Items with existing keys are updated in place via `view.update(item)`
-- Removed items are detached
-- Reordering uses minimal DOM moves
+The factory receives the item value and an `index: () => number` getter that updates when the item moves. The view captures these once at construction.
 
-The factory creates a view per item. Implement `update(item)` on the item view (typically by writing to a signal) so reconciliation can refresh existing instances:
+### How reconciliation handles changes
+
+| Change | Behavior |
+|---|---|
+| Same key, same item reference | View reused. DOM moved if position changed; index signal updated. |
+| Same key, **different reference** | View **destroyed and recreated** via factory. |
+| New key | View created via factory and inserted. |
+| Key removed | View detached. |
+
+The "different reference → recreate" rule is the key design choice. To get in-place updates without recreation, **put signals inside the item** so its reference stays stable:
 
 ```javascript
-class TodoItem extends View {
-  todo;
+// Item shape — fields you want to edit in place are signals.
+type Todo = {
+  id: number;
+  text: ReturnType<typeof signal<string>>;
+  done: ReturnType<typeof signal<boolean>>;
+};
 
-  constructor(initial) {
+class TodoItem extends View {
+  constructor(todo, index) {
     super();
-    this.todo = signal(initial);
+    this.todo = todo;
+    this.index = index;
   }
 
   render() {
-    const root = new Li().addClass('todo-item');
-    const text = new Span();
-
-    effect(() => {
-      text.setText(this.todo().text);
-      root.toggleClass('completed', this.todo().done);
-    });
-
-    root.append(text);
-    return root;
-  }
-
-  update(todo) {
-    this.todo(todo);
+    return new Li()
+      .toggleClass('completed', this.todo.done)
+      .append(
+        new Input()
+          .setAttribute('type', 'checkbox')
+          .setChecked(this.todo.done)
+          .on('change', () => this.todo.done(!this.todo.done())),
+        new Span().setText(this.todo.text),
+      );
   }
 }
 ```
 
-**Pass new object references for changed items, keep references for unchanged ones.** `List` uses `===` to skip `update()` calls on unchanged items:
+The view passes signal fields directly to mutation methods. When you toggle `done`, the array signal doesn't fire and the reconciler doesn't run; only the affected child's bindings re-run.
+
+### Pitfall: don't replace item references unnecessarily
 
 ```javascript
-// Good — only the toggled item gets a new reference
-this.todos(this.todos().map(t =>
-  t.id === id ? { ...t, done: !t.done } : t
-));
-
-// Bad — every item gets a new reference; List calls update() on all of them
+// Bad — spreads create new references for every item.
+// Every view in the list will be destroyed and recreated.
 this.todos(this.todos().map(t => ({ ...t })));
+
+// Good — toggle the signal in place. Array reference is unchanged,
+// reconciler doesn't run, only the affected row's effects fire.
+const t = this.todos().find(t => t.id === id);
+if (t) t.done(!t.done());
+```
+
+If your item shape is intentionally immutable (no nested signals), then the only way to "edit" is to replace the reference — and yes, that recreates the view. That's the correct behavior for items modeled as values.
+
+### Reactive index
+
+The factory's second argument is `() => number` — a signal-shaped getter that updates when the item moves:
+
+```javascript
+class StripedRow extends View {
+  constructor(item, index) {
+    super();
+    this.item = item;
+    this.index = index;
+  }
+
+  render() {
+    return new Tr()
+      .toggleClass('odd', () => this.index() % 2 === 1)
+      .append(new Td().setText(() => `${this.index() + 1}.`));
+  }
+}
 ```
 
 ## Fragment
@@ -613,9 +644,9 @@ render() {
 }
 ```
 
-### Props down via `update()`, events up via `emit()`
+### Props down via constructor, events up via `emit()`
 
-Children expose `update(data)` for parents to push state down (used by `List`). Children dispatch events with `emit()` for parents to react. Don't reach into a child's signals or fields from a parent.
+Pass everything a child needs — values, signals, getters — through its constructor. Children dispatch events with `emit()` for parents to react. Don't reach into a child's signals or fields from a parent.
 
 ## Method reference
 
@@ -697,5 +728,5 @@ For tags not in this list, use `new Element('section')` style — but prefer the
    - For grouped updates that share a signal, write one `effect()` that touches multiple nodes.
    - Return the root element.
 5. Add event handlers as methods. They typically just write to signals (state) — let effects propagate to the DOM.
-6. If the view will be used inside a `List`, implement `update(item)` to write the new item into a signal.
+6. If the view will be used inside a `List`, accept `(item, index)` in the constructor. Item fields you want to edit in place should be signals on the item itself — see the **Lists** section.
 7. **Do not** reach for `this.el` or any element's `.el` property. Use the typed methods.
