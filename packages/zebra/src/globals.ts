@@ -1,3 +1,5 @@
+import { Element } from './element.ts';
+
 interface GlobalsOwner {
   _registerGlobal(g: GlobalTarget): void;
 }
@@ -97,5 +99,27 @@ export class Document extends GlobalTarget {
 export class Window extends GlobalTarget {
   protected _target(): EventTarget {
     return window;
+  }
+}
+
+class DocumentElementListener extends GlobalTarget {
+  protected _target(): EventTarget {
+    return document.documentElement;
+  }
+}
+
+export class DocumentElement extends Element {
+  private _listenerTarget = new DocumentElementListener();
+
+  constructor() {
+    super('html');
+    if (typeof document !== 'undefined') {
+      this.el = document.documentElement;
+    }
+  }
+
+  on(event: string, handler: EventListener): this {
+    this._listenerTarget.on(event, handler);
+    return this;
   }
 }

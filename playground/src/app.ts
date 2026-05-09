@@ -1,4 +1,4 @@
-import { View, Div, type Element } from '@matthewp/zebra';
+import { View, Div, DocumentElement, type Element } from '@matthewp/zebra';
 import { Counter } from './counter.ts';
 import { FullName } from './full-name.ts';
 import { TempConverter } from './temp-converter.ts';
@@ -22,6 +22,8 @@ export class App extends View {
   ]);
 
   render(): Element {
+    new DocumentElement().setAttribute('data-app', 'zebra-playground');
+
     const root = new Div().addClass('app');
     root.append(this.tabs);
     return root;

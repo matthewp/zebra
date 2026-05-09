@@ -113,7 +113,7 @@ export {
 export { View } from './view.ts';
 export { Model } from './model.ts';
 export { List } from './list.ts';
-export { Document, Window } from './globals.ts';
+export { Document, Window, DocumentElement } from './globals.ts';
 export {
   computed,
   effect,

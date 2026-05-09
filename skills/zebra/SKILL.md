@@ -48,7 +48,7 @@ Node (abstract)
 
 `Node` provides the shared API (`append`, `addClass`, `setStyle`, ...). Methods on `Element` operate on its own state and DOM. Methods on `Fragment` broadcast to its element children.
 
-Sitting outside the `Node` tree are `Document` and `Window` — handles for attaching global event listeners with View-scoped lifetimes. They aren't part of the rendered DOM; see **Global events** below.
+Sitting outside the `Node` tree are `Document`, `Window`, and `DocumentElement` — handles for the global event targets and the `<html>` element, with View-scoped lifetimes. They aren't part of the rendered DOM; see **Global events** below.
 
 ## Element
 
@@ -299,6 +299,26 @@ What you don't have to do: track listeners, remove them on unmount, hold onto a 
 Two rules:
 - **Construct inside `render()`** so the active-View context picks them up. A `new Document()` outside a render isn't scoped to anything and won't auto-clean.
 - **SSR-safe.** `Document` and `Window` don't touch the global `document` / `window` until the View is mounted, so `toString()` on the server is fine.
+
+For the `<html>` element specifically, use `DocumentElement`. It's an Element-shaped wrapper around `document.documentElement` — full reactive mutation surface (`setAttribute`, `addClass`, `toggleClass`, `setStyle`) plus `.on()` for listeners with the same auto-cleanup story.
+
+```javascript
+import { View, Div, DocumentElement, signal } from '@matthewp/zebra';
+
+class App extends View {
+  theme = signal<'light' | 'dark'>('light');
+
+  render() {
+    new DocumentElement()
+      .setAttribute('data-theme', this.theme)
+      .toggleClass('reduced-motion', this.prefersReducedMotion);
+
+    return new Div().addClass('app').append(/* ... */);
+  }
+}
+```
+
+Listeners are auto-removed on unmount. **Mutations are not undone** — if you set `data-theme="dark"` on `<html>`, it stays after the view unmounts. App-root views typically never unmount, so this is rarely visible; if you need cleanup, manage it yourself.
 
 Form elements have typed value methods — never reach for `.el.value` directly.
 
@@ -704,6 +724,14 @@ On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to e
 | Method | Description |
 |---|---|
 | `setValue(s)` / `getValue()` | Value. `s` is `Reactive<string \| number>` |
+
+### Globals
+
+| Class | Description |
+|---|---|
+| `Document` | View-scoped wrapper for `document`. Use `.on(event, handler)` for global listeners |
+| `Window` | View-scoped wrapper for `window`. Use `.on(event, handler)` for global listeners |
+| `DocumentElement` | Element-shaped wrapper for `<html>`. Full reactive mutation surface (`setAttribute`, `addClass`, `toggleClass`, `setStyle`) plus `.on()`. Listeners auto-clean on view unmount; mutations are not undone |
 
 ### Tag subclasses available
 
