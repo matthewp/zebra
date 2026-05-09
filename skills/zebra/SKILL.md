@@ -193,6 +193,7 @@ Methods that accept `Reactive<T>`:
 - `setStyle(prop, value)`
 - `toggleVisible(visible)` — pairs with `show()`/`hide()`
 - `setDisabled(disabled)` — pairs with `disable()`/`enable()`
+- `setFocused(focused)` — pairs with `focus()`/`blur()`. Place after visibility bindings in the chain so visibility effects fire first
 - `setValue(value)` (Input/Textarea/Select), `setChecked(value)` (Input)
 
 `setText` and `setValue` accept `string | number` — the framework coerces.
@@ -314,7 +315,7 @@ effect(() => {
 Methods:
 - `Input` / `Textarea` / `Select` — `setValue(s)` / `getValue()`
 - `Input` (checkboxes) — `setChecked(bool)` / `isChecked()`
-- All — `isFocused()`, `focus()`, `blur()`
+- All — `isFocused()`, `focus()`, `blur()`, `setFocused(b)`
 
 ## Lists
 
@@ -578,6 +579,7 @@ The framework provides typed methods for every common DOM operation. Use them in
 | Write checkbox state | `input.setChecked(b)` |
 | Check focus | `el.isFocused()` |
 | Focus / blur | `el.focus()` / `el.blur()` |
+| Focus reactively | `el.setFocused(signal)` |
 | Read layout (offsetLeft, etc.) | `el.measure(e => e.offsetLeft)` |
 | Dispatch event | `el.emit('name', detail)` |
 | Set innerHTML | `el.setHTML(html)` |
@@ -685,6 +687,7 @@ On `Fragment`, mutation methods (`addClass`, `setAttribute`, ...) broadcast to e
 | `emit(name, detail?, options?)` | Dispatch a `CustomEvent` (bubbles by default) |
 | `focus()` / `blur()` | Native focus control |
 | `isFocused()` | Whether `document.activeElement === el` |
+| `setFocused(b)` | Reactively focus or blur. `b` is `Reactive<boolean>`. Set visibility before focus in your chain — visibility effects fire in subscription order, so `.toggleAttribute('hidden', ...).setFocused(open)` is the correct pattern |
 | `measure(fn)` | Read layout values: `el.measure(e => e.offsetLeft)` |
 | `setHTML(html)` | Set innerHTML (escape hatch). `html` is `Reactive<string>` |
 | `remove()` | Detach from parent DOM |

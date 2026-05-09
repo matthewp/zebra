@@ -370,6 +370,15 @@ export class Element extends Node {
     return this.el !== null && document.activeElement === this.el;
   }
 
+  setFocused(value: Reactive<boolean>): this {
+    if (typeof value === 'function') {
+      effect(() => this.setFocused(value()));
+      return this;
+    }
+    if (this.el) value ? this.el.focus() : this.el.blur();
+    return this;
+  }
+
   measure<T>(fn: (el: HTMLElement) => T): T | undefined {
     return this.el ? fn(this.el) : undefined;
   }

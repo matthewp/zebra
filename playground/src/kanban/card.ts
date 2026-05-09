@@ -43,18 +43,21 @@ export class CardView extends View {
       });
 
     effect(() => {
-      const isEditing = this.editing();
-      if (isEditing) {
+      if (this.editing()) {
         text.hide();
         input.show();
-        input.setValue(this.card.text());
-        queueMicrotask(() => {
-          input.focus();
-          if (input.el) (input.el as HTMLInputElement).select();
-        });
       } else {
         text.show();
         input.hide();
+      }
+    });
+
+    input.setFocused(this.editing);
+
+    effect(() => {
+      if (this.editing()) {
+        input.setValue(this.card.text());
+        input.measure(el => (el as HTMLInputElement).select());
       }
     });
 
