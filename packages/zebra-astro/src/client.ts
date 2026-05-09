@@ -10,8 +10,7 @@ export default (element: HTMLElement) =>
     const view = Component(props as any);
 
     if (client === 'only') {
-      element.replaceChildren();
-      view.mount(element);
+      view.replaceContents(element);
       return;
     }
 

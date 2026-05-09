@@ -183,9 +183,14 @@ export abstract class Node {
   abstract toDOM(): HTMLElement | DocumentFragment;
   abstract toString(): string;
 
-  mount(container: HTMLElement): this {
+  appendTo(container: HTMLElement): this {
     container.append(this.toDOM());
     return this;
+  }
+
+  replaceContents(container: HTMLElement): this {
+    container.replaceChildren();
+    return this.appendTo(container);
   }
 }
 

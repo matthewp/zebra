@@ -158,9 +158,4 @@ export class View extends Element {
   toString(): string {
     return this._getRendered().toString();
   }
-
-  mount(container: HTMLElement): this {
-    container.append(this.toDOM());
-    return this;
-  }
 }

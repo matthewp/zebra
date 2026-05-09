@@ -46,12 +46,6 @@ export class Tabs extends View {
     return root;
   }
 
-  mount(container: HTMLElement): this {
-    super.mount(container);
-    this.positionIndicator(this.activeIndex());
-    return this;
-  }
-
   private positionIndicator(index: number) {
     const btn = this.buttons[index];
     const m = btn?.measure(el => ({ left: el.offsetLeft, width: el.offsetWidth }));

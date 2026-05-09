@@ -5,7 +5,7 @@ description: Work with the Zebra framework — a class-based view framework usin
 
 # Zebra
 
-Zebra is a class-based view framework. Views are plain classes; you build DOM trees by composing typed element wrappers (`Div`, `Span`, `Button`, etc.), wire reactivity with signals and effects, and the same code renders on the server (`toString()`) or the client (`mount()`).
+Zebra is a class-based view framework. Views are plain classes; you build DOM trees by composing typed element wrappers (`Div`, `Span`, `Button`, etc.), wire reactivity with signals and effects, and the same code renders on the server (`toString()`) or the client (`appendTo()` / `replaceContents()`).
 
 The framework leans into imperative DOM construction. Instead of a template DSL, you call methods like `.append()`, `.addClass()`, `.setText()` to build a tree and `effect(() => ...)` to keep parts of it in sync with signals.
 
@@ -65,14 +65,14 @@ All mutation methods return `this` for chaining.
 
 ### Lazy DOM
 
-`Element` does **not** create a DOM node when constructed — only when `toDOM()` or `mount()` is called. This is what makes the same code work for SSR (`toString()` never touches a DOM) and the client.
+`Element` does **not** create a DOM node when constructed — only when `toDOM()`, `appendTo()`, or `replaceContents()` is called. This is what makes the same code work for SSR (`toString()` never touches a DOM) and the client.
 
 After mount, `el` holds the real `HTMLElement`. Methods that mutate state (e.g. `addClass`) update both the internal state *and* the live DOM if mounted.
 
 ```javascript
 const div = new Div().addClass('foo');  // no DOM yet
 div.toString();                          // '<div class="foo"></div>'
-div.mount(document.body);                // creates DOM, appends to body
+div.appendTo(document.body);             // creates DOM, appends to body
 div.addClass('bar');                     // updates state AND div.el.classList
 ```
 
@@ -119,15 +119,23 @@ class UserCard extends View {
 
 ### Mounting
 
+Two methods, both top-level entry points. Pick by how you want the container handled:
+
 ```javascript
-// Client
+// Client — append into container (container's existing children stay)
 const card = new UserCard();
-card.mount(document.querySelector('#app'));
+card.appendTo(document.querySelector('#app'));
+
+// Client — replace container's contents
+const app = new App();
+app.replaceContents(document.querySelector('#app'));
 
 // SSR
 const card = new UserCard();
 const html = card.toString();
 ```
+
+`replaceContents(container)` is `container.replaceChildren()` followed by `appendTo`. Use it when the view owns the container; use `appendTo` when adding alongside existing children.
 
 ### Composing views
 
@@ -559,7 +567,7 @@ const html = new App().toString();
 
 ### Hydration
 
-On the client, **don't call `mount()` if SSR'd HTML is already on the page** — that would build fresh DOM and double-render. Use `hydrate(el)` instead. It runs `render()` (so effects get set up), then walks the existing DOM in parallel and adopts each node, attaching event listeners as it goes.
+On the client, **don't call `appendTo()` / `replaceContents()` if SSR'd HTML is already on the page** — that would build fresh DOM and double-render. Use `hydrate(el)` instead. It runs `render()` (so effects get set up), then walks the existing DOM in parallel and adopts each node, attaching event listeners as it goes.
 
 ```javascript
 const app = new App();
@@ -567,11 +575,11 @@ const existing = document.querySelector('#app').firstElementChild;
 if (existing) {
   app.hydrate(existing);
 } else {
-  app.mount(document.querySelector('#app'));
+  app.appendTo(document.querySelector('#app'));
 }
 ```
 
-After hydrate, the view is fully reactive — signals propagate through effects to update the live DOM, just like with `mount()`.
+After hydrate, the view is fully reactive — signals propagate through effects to update the live DOM, just like with `appendTo`/`replaceContents`.
 
 ### How hydration works
 
@@ -584,7 +592,7 @@ This means **render must be deterministic across server and client** — same si
 
 ### What's not yet supported
 
-`hydrate()` doesn't currently handle `Fragment` or `RawHTML` nodes — it throws a clear error if it hits one. For trees containing those, fall back to `mount()`.
+`hydrate()` doesn't currently handle `Fragment` or `RawHTML` nodes — it throws a clear error if it hits one. For trees containing those, fall back to `appendTo()` / `replaceContents()`.
 
 ## Critical Rules
 
@@ -693,7 +701,8 @@ Pass everything a child needs — values, signals, getters — through its const
 | `on(event, handler)` | Add event listener |
 | `clear()` | Remove all children |
 | `disable()` / `enable()` | Toggle `disabled` attr |
-| `mount(container)` | Build DOM and append to container |
+| `appendTo(container)` | Build DOM and append to container |
+| `replaceContents(container)` | Replace container's children with this view's DOM |
 | `hydrate(el)` | Adopt existing DOM (from SSR) — bind `el`, attach listeners, recurse into children |
 | `toDOM()` / `toString()` | Build DOM / serialize to HTML string |
 

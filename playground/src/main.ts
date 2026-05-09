@@ -8,5 +8,5 @@ const existing = container.firstElementChild as HTMLElement | null;
 if (existing) {
   app.hydrate(existing);
 } else {
-  app.mount(container);
+  app.appendTo(container);
 }
