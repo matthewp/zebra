@@ -675,6 +675,20 @@ render() {
 }
 ```
 
+### `effect()` callbacks must not return a value
+
+`effect(cb)` treats `cb`'s return value as a cleanup function. Since every mutation method returns `this` for chaining, a concise-body arrow that calls one captures `this` as cleanup — and crashes on the next run with `TypeError: cleanup is not a function`.
+
+```javascript
+// Bad — concise body returns `el`, captured as cleanup, throws on next signal change
+effect(() => el.setText(count()));
+
+// Good — block body, no return
+effect(() => { el.setText(count()); });
+```
+
+Always block-body the arrow when the body is a single chainable call. This applies to view code *and* any framework code that wires reactive setters internally.
+
 ### Props down via constructor, events up via `emit()`
 
 Pass everything a child needs — values, signals, getters — through its constructor. Children dispatch events with `emit()` for parents to react. Don't reach into a child's signals or fields from a parent.
