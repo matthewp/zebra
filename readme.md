@@ -7,7 +7,7 @@ A class-based view framework for building web UIs with signals and imperative DO
 Paste this into Claude Code (or any agent that supports skills):
 
 ```text
-Run `npx skills add matthewp/zebra`, load the zebra skill, and ask me what I want to build.
+Run `npx rosie-skills install matthewp/zebra`, load the zebra skill, and ask me what I want to build.
 ```
 
 The agent installs the Zebra skill, learns the framework's conventions, then walks you through your first view.
@@ -60,5 +60,5 @@ npm install @matthewp/zebra
 The [Zebra skill](skills/zebra/SKILL.md) teaches an agent the framework's conventions. The "Start with your AI agent" snippet above installs it; you can also add it directly:
 
 ```bash
-npx skills add matthewp/zebra
+npx rosie-skills install matthewp/zebra
 ```
