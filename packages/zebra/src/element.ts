@@ -40,16 +40,46 @@ function splitClasses(classes: string[]): string[] {
 
 export type Child = Node | string;
 
+// Mirror how the HTML parser models child nodes: adjacent text merges into one
+// text node, and empty text doesn't exist. Keeping `_children` aligned with
+// that model is what makes hydration's lockstep walk work.
+function appendNormalized(arr: Child[], children: readonly Child[]): void {
+  for (const child of children) {
+    if (typeof child === 'string') {
+      if (child === '') continue;
+      const last = arr[arr.length - 1];
+      if (typeof last === 'string') arr[arr.length - 1] = last + child;
+      else arr.push(child);
+    } else {
+      arr.push(child);
+    }
+  }
+}
+
+function prependNormalized(arr: Child[], children: readonly Child[]): void {
+  const incoming: Child[] = [];
+  appendNormalized(incoming, children);
+  if (incoming.length > 0 && arr.length > 0) {
+    const lastNew = incoming[incoming.length - 1];
+    const firstOld = arr[0];
+    if (typeof lastNew === 'string' && typeof firstOld === 'string') {
+      arr[0] = lastNew + firstOld;
+      incoming.pop();
+    }
+  }
+  arr.unshift(...incoming);
+}
+
 export abstract class Node {
   protected _children: Child[] = [];
 
   append(...children: Child[]): this {
-    this._children.push(...children);
+    appendNormalized(this._children, children);
     return this;
   }
 
   prepend(...children: Child[]): this {
-    this._children.unshift(...children);
+    prependNormalized(this._children, children);
     return this;
   }
 
@@ -58,7 +88,8 @@ export abstract class Node {
       effect(() => { this.setText(text()); });
       return this;
     }
-    this._children = [typeof text === 'string' ? text : String(text)];
+    const s = typeof text === 'string' ? text : String(text);
+    this._children = s === '' ? [] : [s];
     return this;
   }
 
@@ -208,21 +239,31 @@ export class Element extends Node {
   }
 
   append(...children: Child[]): this {
-    this._children.push(...children);
+    appendNormalized(this._children, children);
     if (this.el) {
       for (const child of children) {
-        this.el.append(child instanceof Node ? child.toDOM() : child);
+        if (typeof child === 'string') {
+          if (child === '') continue;
+          this.el.append(child);
+        } else {
+          this.el.append(child.toDOM());
+        }
       }
     }
     return this;
   }
 
   prepend(...children: Child[]): this {
-    this._children.unshift(...children);
+    prependNormalized(this._children, children);
     if (this.el) {
       for (let i = children.length - 1; i >= 0; i--) {
         const child = children[i];
-        this.el.prepend(child instanceof Node ? child.toDOM() : child);
+        if (typeof child === 'string') {
+          if (child === '') continue;
+          this.el.prepend(child);
+        } else {
+          this.el.prepend(child.toDOM());
+        }
       }
     }
     return this;
@@ -234,7 +275,7 @@ export class Element extends Node {
       return this;
     }
     const s = typeof text === 'string' ? text : String(text);
-    this._children = [s];
+    this._children = s === '' ? [] : [s];
     if (this.el) this.el.textContent = s;
     return this;
   }
