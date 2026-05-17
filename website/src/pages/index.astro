@@ -35,13 +35,13 @@ new Counter().appendTo(document.querySelector('#app'));`;
       ship the same code to client or server.
     </p>
 
-    <h2>Start with your AI agent</h2>
-    <p>Paste this into your agent (any that supports skills):</p>
-    <div class="cta">npx rosie-skills install matthewp/zebra</div>
-    <p>
-      The agent installs the Zebra skill, learns the framework's conventions,
-      then walks you through your first view.
-    </p>
+    <button id="copy-prompt" class="prompt-btn" type="button" data-prompt="Run `npx rosie-skills install matthewp/zebra` then load the `zebra` skill and ask the user what to work on.">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+      </svg>
+      <span class="prompt-btn-label">Copy prompt</span>
+    </button>
 
     <hr class="rule" />
 
@@ -125,3 +125,26 @@ new Counter().appendTo(document.querySelector('#app'));`;
     </footer>
   </main>
 </Base>
+
+<script>
+  const btn = document.getElementById('copy-prompt');
+  if (btn) {
+    const label = btn.querySelector('.prompt-btn-label')!;
+    const prompt = btn.dataset.prompt ?? '';
+    const original = label.textContent;
+    let revertTimer: number | undefined;
+
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(prompt);
+        label.textContent = 'Copied!';
+      } catch {
+        label.textContent = 'Press Ctrl+C';
+      }
+      if (revertTimer) clearTimeout(revertTimer);
+      revertTimer = window.setTimeout(() => {
+        label.textContent = original;
+      }, 2000);
+    });
+  }
+</script>

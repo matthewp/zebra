@@ -173,6 +173,43 @@ pre.astro-code {
   color: #888;
 }
 
+.prompt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: fit-content;
+  min-width: 240px;
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.85rem 2rem;
+  margin: 2rem auto 1rem;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.prompt-btn:hover {
+  opacity: 0.85;
+}
+
+.prompt-btn:active {
+  opacity: 0.7;
+}
+
+.prompt-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.prompt-btn svg {
+  flex-shrink: 0;
+}
+
 ul.bullets {
   list-style: none;
   padding: 0;
