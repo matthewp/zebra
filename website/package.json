@@ -1,0 +1,17 @@
+{
+  "name": "@matthewp/zebra-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "astro build && wrangler deploy"
+  },
+  "dependencies": {
+    "astro": "^6.3.3"
+  },
+  "devDependencies": {
+    "wrangler": "^3.95.0"
+  }
+}

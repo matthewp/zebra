@@ -4,6 +4,7 @@
   "workspaces": [
     "packages/*",
     "packages/zebra-astro/example",
-    "playground"
+    "playground",
+    "website"
   ]
 }

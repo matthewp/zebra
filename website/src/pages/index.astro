@@ -1,0 +1,127 @@
+---
+import { Code } from 'astro:components';
+import Base from '../layouts/Base.astro';
+
+const counter = `import { View, Div, Span, Button, signal } from '@matthewp/zebra';
+
+class Counter extends View {
+  count = signal(0);
+
+  render() {
+    return new Div().addClass('counter').append(
+      new Span().setText(this.count),
+      new Button().setText('+').on('click', () => this.count(this.count() + 1)),
+    );
+  }
+}
+
+new Counter().appendTo(document.querySelector('#app'));`;
+---
+<Base>
+  <main class="page">
+    <header class="masthead">
+      <h1 class="wordmark">ZEBRA</h1>
+      <div class="stripes" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <p class="tagline">a class-based view framework</p>
+    </header>
+
+    <p class="lede">
+      Build web UIs with signals and imperative DOM construction. Views are
+      plain classes; you compose element wrappers (<code>Div</code>,
+      <code>Span</code>, ...), wire reactivity with signals and effects, and
+      ship the same code to client or server.
+    </p>
+
+    <h2>Start with your AI agent</h2>
+    <p>Paste this into your agent (any that supports skills):</p>
+    <div class="cta">npx rosie-skills install matthewp/zebra</div>
+    <p>
+      The agent installs the Zebra skill, learns the framework's conventions,
+      then walks you through your first view.
+    </p>
+
+    <hr class="rule" />
+
+    <h2>Counter example</h2>
+    <Code code={counter} lang="js" theme="github-light" />
+
+    <hr class="rule" />
+
+    <h2>Why Zebra</h2>
+    <ul class="bullets">
+      <li>
+        <strong>No template DSL.</strong> Views are plain classes.
+        <code>render()</code> builds DOM with element wrappers and returns the root.
+      </li>
+      <li>
+        <strong>Signals, not virtual DOM.</strong> Reactivity flows through
+        <a href="https://github.com/stackblitz/alien-signals">alien-signals</a>;
+        effects update only the nodes that depend on a changed signal.
+      </li>
+      <li>
+        <strong>Same code, server or client.</strong>
+        <code>view.toString()</code> produces HTML strings without touching a DOM;
+        <code>view.appendTo(el)</code> builds and attaches real DOM;
+        <code>view.hydrate(el)</code> adopts SSR'd HTML and wires it up.
+      </li>
+      <li>
+        <strong>Typed DOM access.</strong> Reach for <code>getValue()</code>,
+        <code>setChecked()</code>, <code>isFocused()</code>,
+        <code>measure()</code> — <code>view.el</code> is rarely needed.
+      </li>
+    </ul>
+
+    <hr class="rule" />
+
+    <h2>Concepts</h2>
+    <ul class="bullets">
+      <li>
+        <strong>Element</strong> wraps a tag (<code>Div</code>, <code>Span</code>,
+        <code>Button</code>, ...). Build a tree with <code>.append()</code>, style
+        with <code>.addClass()</code> / <code>.setStyle()</code>, attach handlers
+        with <code>.on()</code>.
+      </li>
+      <li>
+        <strong>View</strong> is a component class. Override <code>render()</code>
+        to return an <code>Element</code>. Mount with <code>view.appendTo(el)</code>,
+        hydrate SSR'd HTML with <code>view.hydrate(el)</code>, or embed inside
+        another view via <code>parent.append(view)</code>.
+      </li>
+      <li>
+        <strong>signal(v)</strong> holds reactive state. <code>count()</code>
+        reads, <code>count(v)</code> writes.
+      </li>
+      <li>
+        <strong>effect(fn)</strong> re-runs <code>fn</code> whenever any signal
+        it read changes — used to update the DOM from state.
+      </li>
+      <li>
+        <strong>List</strong> handles dynamic lists with keyed reconciliation; takes
+        a signal of items, a key fn, and a factory.
+      </li>
+      <li>
+        <strong>Fragment</strong> groups multiple siblings without a wrapper tag.
+      </li>
+      <li>
+        <strong>Model</strong> is a base class for state owned outside views —
+        gives <code>loading</code> / <code>error</code> signals, an async
+        <code>run()</code> helper, and <code>toJSON()</code>/<code>fromJSON()</code>
+        for SSR round-trip.
+      </li>
+      <li>
+        <strong>Document / Window</strong> attach global event listeners scoped to
+        the View that creates them; listeners are removed when the View leaves the DOM.
+      </li>
+    </ul>
+
+    <footer class="footer">
+      <span>zebra · BSD-3-Clause</span>
+      <span>
+        <a href="https://github.com/matthewp/zebra">github</a>
+      </span>
+    </footer>
+  </main>
+</Base>
