@@ -3,6 +3,11 @@
   "version": "0.3.2",
   "license": "BSD-3-Clause",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matthewp/zebra.git",
+    "directory": "packages/zebra"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
