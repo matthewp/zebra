@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes @matthewp/zebra to npm when a `v*` tag is pushed.
+# The release flow is: bump packages/zebra/package.json, commit
+# "Release @matthewp/zebra vX.Y.Z", tag vX.Y.Z, then push the tag.
+# (zebra-astro uses `zebra-astro-v*` tags, which don't match here.)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Minimal default token permissions. Jobs opt in to writes explicitly.
+permissions:
+  contents: read
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        with:
+          generate_release_notes: true
+
+  npm-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC trusted publishing to npm (+ provenance)
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION=$(node -p "require('./packages/zebra/package.json').version")
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match packages/zebra/package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the package
+        # Ships dist/ produced from src/ via tsc; this also catches type errors.
+        run: npm run build --workspace @matthewp/zebra
+
+      - name: Publish to npm
+        run: npm publish --workspace @matthewp/zebra --access public
