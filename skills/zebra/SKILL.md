@@ -420,6 +420,12 @@ if (t) t.done(!t.done());
 
 If your item shape is intentionally immutable (no nested signals), then the only way to "edit" is to replace the reference — and yes, that recreates the view. That's the correct behavior for items modeled as values.
 
+### `List` under hydration
+
+`List` is hydration-safe — unlike `Fragment`/`RawHTML`, you *can* put it inside a tree you `hydrate()`. The mechanism: `List.render()` returns a container plus an `effect()` that builds children on its first run. That first run happens during `render()`, while the container is still unmounted (`el === null`), so it only builds child state — the row views, which are `Element` subclasses, are then adopted in lockstep by the hydrate walk exactly like any other children. Keyed reconciliation against live DOM only kicks in on *later* signal changes, after mount.
+
+The one requirement is the usual determinism rule (below): the items source must be **seeded from the same SSR data** so the first build produces markup identical to the server's. Pass the initial array through the constructor (e.g. from the page's hydration JSON) and `signal(initial)` it — don't derive it from `Date.now()`, `Math.random()`, or the DOM.
+
 ### Reactive index
 
 The factory's second argument is `() => number` — a signal-shaped getter that updates when the item moves:
@@ -588,11 +594,13 @@ After hydrate, the view is fully reactive — signals propagate through effects 
 - For each string child, claim a text node and advance.
 - Listeners attached via `.on()` are wired to the adopted DOM node (the server HTML didn't have them).
 
-This means **render must be deterministic across server and client** — same signals, same render output. Don't read from `Date.now()`, `Math.random()`, or browser-only APIs inside `render()` unless you're prepared for hydration mismatches.
+This means **render must be deterministic across server and client** — same signals, same render output. Don't read from `Date.now()`, `Math.random()`, or browser-only APIs inside `render()` unless you're prepared for hydration mismatches. The same determinism applies to the *first run* of any `effect()` created in `render()`, since hydration relies on it producing the SSR'd state.
+
+The rule that makes this work: **mutation methods are DOM no-ops while the element is unmounted (`el === null`) and only touch real DOM once mounted.** During `hydrate()`, `render()` runs first — effects fire once, building `_children`/`_attrs` but no DOM — then the hydrate walk binds each `el`. So a reactive binding's first run just builds state (which hydrate then adopts); only *later* runs, after `el` is bound, mutate the live DOM. This is why effects and reactive bindings created in `render()` survive hydration without double-rendering, and it's exactly what makes reactive `List` children (above) safe.
 
 ### What's not yet supported
 
-`hydrate()` doesn't currently handle `Fragment` or `RawHTML` nodes — it throws a clear error if it hits one. For trees containing those, fall back to `appendTo()` / `replaceContents()`.
+`hydrate()` doesn't currently handle `Fragment` or `RawHTML` nodes — it throws a clear error if it hits one. For trees containing those, fall back to `appendTo()` / `replaceContents()`. (`List` *is* supported — see [`List` under hydration](#list-under-hydration).)
 
 ## Critical Rules
 
