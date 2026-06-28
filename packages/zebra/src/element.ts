@@ -729,3 +729,5 @@ export class Code extends Element { constructor() { super('code'); } }
 export class Strong extends Element { constructor() { super('strong'); } }
 export class Em extends Element { constructor() { super('em'); } }
 export class Small extends Element { constructor() { super('small'); } }
+export class Details extends Element { constructor() { super('details'); } }
+export class Summary extends Element { constructor() { super('summary'); } }

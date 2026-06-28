@@ -45,6 +45,8 @@ export {
   Strong,
   Em,
   Small,
+  Details,
+  Summary,
 } from './element.ts';
 export type { Child } from './element.ts';
 export {

@@ -774,6 +774,7 @@ Lists: `Ul`, `Ol`, `Li`
 Tables: `Table`, `Thead`, `Tbody`, `Tr`, `Td`, `Th`
 Forms: `Form`, `Input`, `Textarea`, `Label`, `Button`, `Select`, `Option`, `Output`
 Inline: `Anchor` (a), `Strong`, `Em`, `Small`, `Code`, `Pre`
+Disclosure: `Details`, `Summary`
 Media: `Img`
 Void: `Br`, `Hr`
 
