@@ -654,7 +654,22 @@ const rect = view.measure(el => el.getBoundingClientRect());
 
 ### State lives in signals
 
-Don't write `this.count = newValue` and update the DOM by hand. Put state in signals, let an effect update the DOM. Setters with equality guards are unnecessary — signals don't notify when value is unchanged.
+**Signals are how you change anything after render. This is the central rule of the framework.** You build the DOM once in `render()`; from then on you don't reach back into elements to mutate them — you write a signal and let its binding update the DOM. This applies to *every* update, not any one scenario.
+
+```javascript
+// ✗ Bad — mutate the DOM by hand
+this.count = newValue;
+this.label.setText(String(newValue));
+
+// ✓ Good — write the signal; the binding does the DOM
+this.count(newValue);   // render did `label.setText(this.count)` once
+```
+
+Two consequences worth naming, because both push you back toward imperative DOM:
+
+- **Don't stash an element to poke it later.** If you find yourself holding an element as a field so you can call `setValue`/`setText`/`addClass` on it after render, the thing you want to change is *state* — put it in a signal and bind the element to it. The handle disappears. (This is the same rule as [Never reach for `this.el`](#never-reach-for-thisel) — using a typed method like `setValue()` on a stashed element instead of `.el.value` is the same smell.) This does **not** conflict with [Declare child views as fields](#declare-child-views-as-fields): a composed child *View* is structural and belongs as a field; a plain element kept only to mutate later does not.
+
+- **Reading a value back before writing it is the tell.** A guard like `if (input.getValue() !== old) input.setValue(...)` means state lives in the DOM and you're reconciling against it. With a signal there is one source of truth and no read-back. Setters with equality guards are likewise unnecessary — signals don't notify when the value is unchanged.
 
 ### Declare child views as fields
 
