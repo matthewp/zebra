@@ -216,11 +216,11 @@ render() {
 }
 ```
 
-**Inline `computed` inside `render()` when it's only used to set a DOM value.** Promote it to a class field only when something outside `render()` reads it (event handlers, `toJSON()`, parents, subclasses) — keeping render-local computeds local keeps the class shape focused on actual state.
+**Inline `computed` inside `render()` when it's only used to set a DOM value.** Promote it to a class field only when something outside `render()` reads it (event handlers, `toJSON()`, parents, subclasses).
 
 ### Use `effect()` for grouped updates
 
-When several DOM mutations all depend on the **same** signal, write one `effect()` rather than N signal-direct bindings. One effect = one subscription = one notification per change. Three signal-direct bindings on the same signal = three subscriptions and three dispatches.
+When several DOM mutations all depend on the **same** signal, write one `effect()` rather than N signal-direct bindings.
 
 ```javascript
 // Good — one effect, one subscription on this.todo
@@ -372,7 +372,7 @@ The factory receives the item value and an `index: () => number` getter that upd
 | New key | View created via factory and inserted. |
 | Key removed | View detached. |
 
-The "different reference → recreate" rule is the key design choice. To get in-place updates without recreation, **put signals inside the item** so its reference stays stable:
+To get in-place updates without recreation, **put signals inside the item** so its reference stays stable:
 
 ```javascript
 // Item shape — fields you want to edit in place are signals.
@@ -418,11 +418,11 @@ const t = this.todos().find(t => t.id === id);
 if (t) t.done(!t.done());
 ```
 
-If your item shape is intentionally immutable (no nested signals), then the only way to "edit" is to replace the reference — and yes, that recreates the view. That's the correct behavior for items modeled as values.
+If your item shape is intentionally immutable (no nested signals), the only way to "edit" is to replace the reference, which recreates the view.
 
 ### `List` under hydration
 
-`List` is hydration-safe — unlike `Fragment`/`RawHTML`, you *can* put it inside a tree you `hydrate()`. The mechanism: `List.render()` returns a container plus an `effect()` that builds children on its first run. That first run happens during `render()`, while the container is still unmounted (`el === null`), so it only builds child state — the row views, which are `Element` subclasses, are then adopted in lockstep by the hydrate walk exactly like any other children. Keyed reconciliation against live DOM only kicks in on *later* signal changes, after mount.
+`List` is hydration-safe — unlike `Fragment`/`RawHTML`, you *can* put it inside a tree you `hydrate()`. Its children are built during `render()` and adopted by the hydrate walk like any others; keyed reconciliation only kicks in on *later* signal changes, after mount.
 
 The one requirement is the usual determinism rule (below): the items source must be **seeded from the same SSR data** so the first build produces markup identical to the server's. Pass the initial array through the constructor (e.g. from the page's hydration JSON) and `signal(initial)` it — don't derive it from `Date.now()`, `Math.random()`, or the DOM.
 
@@ -490,7 +490,7 @@ export class WeatherModel extends Model {
 }
 ```
 
-`run(asyncFn)` toggles `loading` true → runs the function → captures any thrown error into the `error` signal → toggles `loading` false in `finally`. Replaces the try/catch/finally dance every async method otherwise needs.
+`run(asyncFn)` toggles `loading` true → runs the function → captures any thrown error into the `error` signal → toggles `loading` false in `finally`.
 
 ### Consuming a model in a view
 
@@ -596,7 +596,7 @@ After hydrate, the view is fully reactive — signals propagate through effects 
 
 This means **render must be deterministic across server and client** — same signals, same render output. Don't read from `Date.now()`, `Math.random()`, or browser-only APIs inside `render()` unless you're prepared for hydration mismatches. The same determinism applies to the *first run* of any `effect()` created in `render()`, since hydration relies on it producing the SSR'd state.
 
-The rule that makes this work: **mutation methods are DOM no-ops while the element is unmounted (`el === null`) and only touch real DOM once mounted.** During `hydrate()`, `render()` runs first — effects fire once, building `_children`/`_attrs` but no DOM — then the hydrate walk binds each `el`. So a reactive binding's first run just builds state (which hydrate then adopts); only *later* runs, after `el` is bound, mutate the live DOM. This is why effects and reactive bindings created in `render()` survive hydration without double-rendering, and it's exactly what makes reactive `List` children (above) safe.
+**Mutation methods are DOM no-ops while the element is unmounted (`el === null`) and only touch real DOM once mounted.** So a binding's first run during `render()` only builds state, which the hydrate walk then adopts; only later runs mutate the live DOM.
 
 ### What's not yet supported
 
@@ -654,7 +654,7 @@ const rect = view.measure(el => el.getBoundingClientRect());
 
 ### State lives in signals
 
-**Signals are how you change anything after render. This is the central rule of the framework.** You build the DOM once in `render()`; from then on you don't reach back into elements to mutate them — you write a signal and let its binding update the DOM. This applies to *every* update, not any one scenario.
+**Signals are how you change anything after render.** You build the DOM once in `render()`; from then on you don't reach back into elements to mutate them — you write a signal and let its binding update the DOM.
 
 ```javascript
 // ✗ Bad — mutate the DOM by hand
@@ -665,9 +665,9 @@ this.label.setText(String(newValue));
 this.count(newValue);   // render did `label.setText(this.count)` once
 ```
 
-Two consequences worth naming, because both push you back toward imperative DOM:
+Two consequences:
 
-- **Don't stash an element to poke it later.** If you find yourself holding an element as a field so you can call `setValue`/`setText`/`addClass` on it after render, the thing you want to change is *state* — put it in a signal and bind the element to it. The handle disappears. (This is the same rule as [Never reach for `this.el`](#never-reach-for-thisel) — using a typed method like `setValue()` on a stashed element instead of `.el.value` is the same smell.) This does **not** conflict with [Declare child views as fields](#declare-child-views-as-fields): a composed child *View* is structural and belongs as a field; a plain element kept only to mutate later does not.
+- **Don't stash an element to poke it later.** If you find yourself holding an element as a field so you can call `setValue`/`setText`/`addClass` on it after render, the thing you want to change is *state* — put it in a signal and bind the element to it. The handle disappears. A composed child *View* is different: it's structural and belongs as a field, per [Declare child views as fields](#declare-child-views-as-fields).
 
 - **Reading a value back before writing it is the tell.** A guard like `if (input.getValue() !== old) input.setValue(...)` means state lives in the DOM and you're reconciling against it. With a signal there is one source of truth and no read-back. Setters with equality guards are likewise unnecessary — signals don't notify when the value is unchanged.
 
@@ -686,6 +686,34 @@ class App extends View {
   }
 }
 ```
+
+### Split with Views, not private render methods
+
+**A View's `render()` should contain all of its render logic.** When part of the tree gets big enough to want a name, that name belongs to a `View` subclass — not to a private method returning an element. This holds even when the helper is only to make the code readable.
+
+```ts
+// ✗ Bad — render logic spread across helpers
+class WatchingPage extends View {
+  render() {
+    return new Div().append(this.showList(), this.watchedSection());
+  }
+  private watchedSection() { return new Section().append(/* ... */); }
+}
+
+// ✓ Good — the piece is a View, and its render() owns its tree
+class WatchedSection extends View {
+  render() { return new Section().append(/* ... */); }
+}
+
+class WatchingPage extends View {
+  watched = new WatchedSection(movies);   // a field, per the rule above
+  render() {
+    return new Div().append(this.showList, this.watched);
+  }
+}
+```
+
+Per-item helpers go the same way: `renderRow(item)` becomes a `Row` View, passed to [`List`](#lists) as `(item, index) => new Row(item, index)`.
 
 ### Build structure once, react inside effects
 
@@ -806,6 +834,7 @@ For tags not in this list, use `new Element('section')` style — but prefer the
    - For single-field reactive bindings, pass the signal directly to mutation methods (`setText(this.count)`).
    - For derived values used only to set DOM, declare a `const fullName = computed(...)` inside `render()` and pass it to the mutation method.
    - For grouped updates that share a signal, write one `effect()` that touches multiple nodes.
+   - Keep the whole tree here. If a chunk wants a name, it's a child View (a field, per step 3) — not a private method returning an element.
    - Return the root element.
 5. Add event handlers as methods. They typically just write to signals (state) — let effects propagate to the DOM.
 6. If the view will be used inside a `List`, accept `(item, index)` in the constructor. Item fields you want to edit in place should be signals on the item itself — see the **Lists** section.
